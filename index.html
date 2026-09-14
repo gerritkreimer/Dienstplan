@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dienstplan Mobil</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1f4e78">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary: #1f4e78;
+      --primary-dark: #153552;
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --text: #1a202c;
+      --text-muted: #718096;
+      --border: #e2e8f0;
+      
+      /* Schichtfarben */
+      --f-bg: #d9e1f2; --f-color: #1f3864;
+      --s-bg: #fff2cc; --s-color: #7f6000;
+      --n-bg: #b4c6e7; --n-color: #1b2e4b;
+      --u-bg: #c6efce; --u-color: #276a3c;
+      --kr-bg: #ffc7ce; --kr-color: #9c0006;
+      --we-bg: #f7fafc;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 480px;
+      padding-bottom: 24px;
+    }
+
+    /* Header */
+    header {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white;
+      padding: 20px 16px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background-color: #cbd5e0;
+      display: inline-block;
+    }
+
+    .status-dot.online {
+      background-color: #48bb78;
+      box-shadow: 0 0 8px #48bb78;
+    }
+
+    /* Setup / Kennung Bar */
+    .id-bar {
+      margin-top: 14px;
+      display: flex;
+      gap: 8px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 6px;
+      border-radius: 10px;
+    }
+
+    .id-bar input {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid transparent;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      outline: none;
+      color: var(--text);
+    }
+
+    .id-bar button {
+      background: #2b6cb0;
+      color: white;
+      border: none;
+      padding: 0 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .id-bar button:active {
+      background: #1a4971;
+    }
+
+    /* Monatsnavigation */
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      background: var(--surface);
+      margin: 12px 16px;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+
+    .nav-btn {
+      background: #edf2f7;
+      border: none;
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      font-size: 1.2rem;
+      color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .nav-btn:active { background: #e2e8f0; }
+
+    .current-month {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--primary-dark);
+    }
+
+    /* Schicht-Liste */
+    .schedule-list {
+      padding: 0 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .day-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      padding: 12px 16px;
+      border-radius: 12px;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+      border-left: 5px solid transparent;
+    }
+
+    .day-row.is-today {
+      border: 1.5px solid var(--primary);
+      background: #f7faff;
+    }
+
+    .day-row.is-weekend {
+      background: #fafbfc;
+    }
+
+    .day-date-group {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .day-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      width: 26px;
+    }
+
+    .day-num {
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    .day-badge {
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 6px 14px;
+      border-radius: 8px;
+      min-width: 48px;
+      text-align: center;
+      background: #edf2f7;
+      color: #a0aec0;
+    }
+
+    /* Schicht-Badges */
+    .badge-F  { background: var(--f-bg); color: var(--f-color); }
+    .badge-S  { background: var(--s-bg); color: var(--s-color); }
+    .badge-N  { background: var(--n-bg); color: var(--n-color); }
+    .badge-U, .badge-SU { background: var(--u-bg); color: var(--u-color); }
+    .badge-KR, .badge-KUR { background: var(--kr-bg); color: var(--kr-color); }
+    .badge-T  { background: #e2e8f0; color: #2d3748; }
+
+    /* Empty & Loading */
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <header>
+    <div class="header-content">
+      <div class="logo-title">
+        <span>📱 Dienstplan Live</span>
+        <span class="status-dot" id="liveDot" title="Verbindungsstatus"></span>
+      </div>
+      <span id="labelUser" style="font-size: 0.85rem; opacity: 0.85;"></span>
+    </div>
+
+    <div class="id-bar">
+      <input type="text" id="inputKennung" placeholder="3 Ziffern (z. B. 081)" maxlength="3" inputmode="numeric">
+      <button id="btnSaveKennung">Laden</button>
+    </div>
+  </header>
+
+  <div class="nav-bar">
+    <button class="nav-btn" id="btnPrevMonth">&#8249;</button>
+    <span class="current-month" id="displayMonth">Lade...</span>
+    <button class="nav-btn" id="btnNextMonth">&#8250;</button>
+  </div>
+
+  <div class="schedule-list" id="scheduleContainer">
+    <div class="empty-state">Lade Daten aus Firebase...</div>
+  </div>
+</div>
+
+<script>
+  const FIREBASE_DB_URL = "https://dienstplan-2cad6-default-rtdb.europe-west1.firebasedatabase.app/dienstplan.json";
+
+  let gAllData = {};
+  let gCurrentDate = new Date();
+  let gSelectedKennung = localStorage.getItem("dp_mobile_kennung") || "";
+
+  const displayMonth = document.getElementById("displayMonth");
+  const scheduleContainer = document.getElementById("scheduleContainer");
+  const liveDot = document.getElementById("liveDot");
+  const inputKennung = document.getElementById("inputKennung");
+  const btnSaveKennung = document.getElementById("btnSaveKennung");
+  const labelUser = document.getElementById("labelUser");
+
+  if (gSelectedKennung) {
+    inputKennung.value = gSelectedKennung;
+    labelUser.textContent = `ID: ${gSelectedKennung}`;
+  }
+
+  // --- 1. FIREBASE SSE-STREAM FÜR ECHTZEIT-SYNC ---
+  function startFirebaseSync() {
+    const sse = new EventSource(FIREBASE_DB_URL);
+
+    sse.addEventListener("put", (e) => {
+      liveDot.classList.add("online");
+      const payload = JSON.parse(e.data);
+      if (payload.path === "/") {
+        gAllData = payload.data || {};
+      } else {
+        // Teil-Update (z. B. nur eine Kennung)
+        const parts = payload.path.replace(/^\//, "").split("/");
+        if (parts.length === 1 && parts[0]) {
+          gAllData[parts[0]] = payload.data;
+        }
+      }
+      renderSchedule();
+    });
+
+    sse.onerror = () => {
+      liveDot.classList.remove("online");
+    };
+  }
+
+  // Fallback initialer Fetch
+  async function fetchInitialData() {
+    try {
+      const res = await fetch(FIREBASE_DB_URL);
+      if (res.ok) {
+        gAllData = await res.json() || {};
+        liveDot.classList.add("online");
+        renderSchedule();
+      }
+    } catch (err) {
+      console.warn("Initialer Fetch fehlgeschlagen:", err);
+    }
+  }
+
+  // --- 2. RENDERING LOGIK ---
+  function renderSchedule() {
+    if (!gSelectedKennung) {
+      scheduleContainer.innerHTML = '<div class="empty-state">Bitte gib oben deine 3 Ziffern ein.</div>';
+      return;
+    }
+
+    const year = gCurrentDate.getFullYear();
+    const month = gCurrentDate.getMonth();
+    
+    // Monat Überschrift
+    const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    displayMonth.textContent = `${monthNames[month]} ${year}`;
+
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const dayNames = ["SO", "MO", "DI", "MI", "DO", "FR", "SA"];
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    const userShifts = gAllData[gSelectedKennung] || {};
+    let html = "";
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayDate = new Date(year, month, day);
+      const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const dayOfWeek = dayDate.getDay();
+      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+      const isToday = (isoDate === todayStr);
+
+      const rawShift = userShifts[isoDate] || "";
+      const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
+
+      let badgeClass = "day-badge";
+      if (baseShift) {
+        badgeClass += ` badge-${baseShift}`;
+      }
+
+      html += `
+        <div class="day-row ${isWeekend ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">
+          <div class="day-date-group">
+            <span class="day-name">${dayNames[dayOfWeek]}</span>
+            <span class="day-num">${day}.</span>
+          </div>
+          <span class="${badgeClass}">${rawShift || "—"}</span>
+        </div>
+      `;
+    }
+
+    scheduleContainer.innerHTML = html;
+  }
+
+  // --- 3. EVENT LISTENER ---
+  btnSaveKennung.addEventListener("click", () => {
+    const val = inputKennung.value.trim().padStart(3, "0");
+    if (val.length === 3) {
+      gSelectedKennung = val;
+      localStorage.setItem("dp_mobile_kennung", val);
+      labelUser.textContent = `ID: ${val}`;
+      renderSchedule();
+    }
+  });
+
+  inputKennung.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") btnSaveKennung.click();
+  });
+
+  document.getElementById("btnPrevMonth").addEventListener("click", () => {
+    gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
+    renderSchedule();
+  });
+
+  document.getElementById("btnNextMonth").addEventListener("click", () => {
+    gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
+    renderSchedule();
+  });
+
+  // Start
+  fetchInitialData();
+  startFirebaseSync();
+</script>
+
+</body>
+</html>
