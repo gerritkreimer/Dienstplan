@@ -94,7 +94,7 @@
     }
     .month-title { font-weight: 700; font-size: 1rem; color: var(--primary); }
 
-    /* Matrix Tabelle Scrollbereich */
+    /* Tabelle Scrollbereich */
     .grid-wrapper {
       flex: 1;
       overflow: auto;
@@ -121,7 +121,6 @@
       padding: 2px 4px;
     }
 
-    /* Fixed Header (Zeile 1 & 2) */
     thead tr:nth-child(1) th {
       position: sticky;
       top: 0;
@@ -142,14 +141,13 @@
       color: #546e7a;
     }
 
-    /* Erste Spalte: Fkt / Name fixiert */
     .col-id {
       position: sticky;
       left: 0;
       z-index: 10;
-      width: 105px;
-      min-width: 105px;
-      max-width: 105px;
+      width: 110px;
+      min-width: 110px;
+      max-width: 110px;
       background: #f8f9fa;
       font-weight: 700;
       text-align: left;
@@ -274,7 +272,6 @@
   let gShowNames = false;
   let gCurrentDate = new Date();
 
-  // RC4 Entschlüsselung
   function decryptRC4Hex(hexStr, password) {
     try {
       if (!hexStr || !password) return null;
@@ -330,7 +327,6 @@
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    // 1. Header Zeile 1 & 2
     let thWochentag = `<th class="col-id">Funktion</th>`;
     let thTage = `<th class="col-id">Kennung</th>`;
 
@@ -348,7 +344,6 @@
     document.getElementById("rowWochentage").innerHTML = thWochentag;
     document.getElementById("rowTage").innerHTML = thTage;
 
-    // 2. Zeilen (Mitarbeiter)
     const userKeys = Object.keys(gDataShifts);
     const tbody = document.getElementById("matrixBody");
 
@@ -357,11 +352,11 @@
       return;
     }
 
-    const fktOrder = { "DGL": 1, "EB": 2, "OSINT": 3, "FLDL": 4, "FLD": 5 };
+    // SORTIERUNG: Strikt nach dem vom Excel-Planer übergebenen Original-Sortierindex (sort)
     userKeys.sort((a, b) => {
-      const fktA = (gDataMeta[a] && gDataMeta[a].fkt) ? (fktOrder[gDataMeta[a].fkt] || 99) : 99;
-      const fktB = (gDataMeta[b] && gDataMeta[b].fkt) ? (fktOrder[gDataMeta[b].fkt] || 99) : 99;
-      if (fktA !== fktB) return fktA - fktB;
+      const sortA = (gDataMeta[a] && gDataMeta[a].sort !== undefined) ? gDataMeta[a].sort : 999;
+      const sortB = (gDataMeta[b] && gDataMeta[b].sort !== undefined) ? gDataMeta[b].sort : 999;
+      if (sortA !== sortB) return sortA - sortB;
       return a.localeCompare(b);
     });
 
@@ -402,9 +397,7 @@
     tbody.innerHTML = tbodyHtml;
   }
 
-  // Initialer Start beim Laden der Seite
   window.addEventListener("DOMContentLoaded", () => {
-    // 1. Sofort Tabelle zeichnen (kein Lade-Hänger mehr möglich!)
     renderTable();
 
     const liveDot = document.getElementById("liveDot");
@@ -412,7 +405,6 @@
     const pinModal = document.getElementById("pinModal");
     const pinInput = document.getElementById("pinInput");
 
-    // 2. Daten laden
     fetch(FIREBASE_DB_URL)
       .then(r => r.json())
       .then(data => {
@@ -421,7 +413,6 @@
       })
       .catch(err => console.warn("Fetch Error:", err));
 
-    // 3. SSE Live-Stream
     try {
       const sse = new EventSource(FIREBASE_DB_URL);
       sse.addEventListener("put", (e) => {
@@ -432,7 +423,6 @@
       sse.onerror = () => liveDot.classList.remove("online");
     } catch(e) {}
 
-    // Event Listener Buttons
     document.getElementById("btnPrevMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
       renderTable();
