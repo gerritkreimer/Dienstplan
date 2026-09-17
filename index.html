@@ -1,31 +1,289 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dienstplan Mobil</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1f4e78">
+  <link rel="apple-touch-icon" href="icon.png">
+  <link rel="icon" type="image/png" href="icon.png">
+  
+  <style>
+    :root {
+      --primary: #1f4e78;
+      --bg: #eceff1;
+      --border: #b0bec5;
+      --border-dark: #78909c;
+      
+      /* Originalfarben aus Excel */
+      --c-f-bg: #ffff00; --c-f-fg: #000;
+      --c-s-bg: #ffc000; --c-s-fg: #000;
+      --c-n-bg: #92d050; --c-n-fg: #000;
+      --c-u-bg: #c6efce; --c-u-fg: #006100;
+      --c-wf-bg: #ddebf7; --c-wf-fg: #1f4e78;
+      --c-t-bg: #bdd7ee; --c-t-fg: #1f4e78;
+      --c-kr-bg: #ffc7ce; --c-kr-fg: #9c0006;
+      --c-la-bg: #e1d5e7; --c-la-fg: #6a00ff;
+      --c-we-hdr: #fce4d6; --c-we-col: #fff9f5;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: #263238;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--primary);
+      color: white;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    .header-left { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #90a4ae; }
+    .status-dot.online { background: #00e676; box-shadow: 0 0 6px #00e676; }
+
+    .btn-top {
+      background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-top.active-names { background: #ff9800; border-color: #ff9800; color: #000; }
+
+    .month-bar {
+      background: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      background: #cfd8dc;
+      border: none;
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .month-title { font-weight: 700; font-size: 0.95rem; color: var(--primary); }
+
+    /* Tabelle Scrollbereich */
+    .grid-wrapper {
+      flex: 1;
+      overflow: auto;
+      background: #cfd8dc;
+      position: relative;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      border-collapse: separate;
+      border-spacing: 0;
+      background: white;
+      table-layout: fixed;
+    }
+
+    th, td {
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      text-align: center;
+      vertical-align: middle;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      user-select: none;
+    }
+
+    /* Fixed Header (Zeile 1 & 2) */
+    thead tr:nth-child(1) th {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      height: 22px;
+      background: #f1f3f4;
+      font-weight: 700;
+      color: #37474f;
+    }
+
+    thead tr:nth-child(2) th {
+      position: sticky;
+      top: 22px;
+      z-index: 20;
+      height: 20px;
+      background: #eceff1;
+      font-size: 0.7rem;
+      color: #607d8b;
+    }
+
+    /* Fixierte linke Spalte (Kennung / Name) */
+    .col-id {
+      position: sticky;
+      left: 0;
+      z-index: 10;
+      width: 95px;
+      min-width: 95px;
+      max-width: 95px;
+      background: #f8f9fa;
+      font-weight: 700;
+      text-align: left;
+      padding-left: 8px;
+      border-right: 2px solid var(--border-dark);
+    }
+
+    thead tr:nth-child(1) th.col-id {
+      top: 0;
+      z-index: 30;
+      background: #e0e0e0;
+      border-right: 2px solid var(--border-dark);
+    }
+    thead tr:nth-child(2) th.col-id {
+      top: 22px;
+      z-index: 30;
+      background: #d6d6d6;
+      border-right: 2px solid var(--border-dark);
+    }
+
+    .col-day {
+      width: 38px;
+      min-width: 38px;
+      max-width: 38px;
+    }
+
+    /* Wochenende & Heute */
+    th.is-weekend { background: var(--c-we-hdr) !important; color: #c62828 !important; }
+    td.is-weekend { background: var(--c-we-col); }
+    th.is-today, td.is-today { outline: 2px solid var(--primary); outline-offset: -2px; }
+
+    /* Schicht-Styles */
+    .shift-F  { background: var(--c-f-bg) !important; color: var(--c-f-fg); font-weight: 700; }
+    .shift-S  { background: var(--c-s-bg) !important; color: var(--c-s-fg); font-weight: 700; }
+    .shift-N  { background: var(--c-n-bg) !important; color: var(--c-n-fg); font-weight: 700; }
+    .shift-U, .shift-SU { background: var(--c-u-bg) !important; color: var(--c-u-fg); font-weight: 700; }
+    .shift-WF { background: var(--c-wf-bg) !important; color: var(--c-wf-fg); font-weight: 700; }
+    .shift-T  { background: var(--c-t-bg) !important; color: var(--c-t-fg); font-weight: 700; }
+    .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg); font-weight: 700; }
+    .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg); font-weight: 700; }
+
+    /* PIN Popup */
+    .pin-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .pin-card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      width: 280px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+    .pin-card input {
+      width: 100%;
+      padding: 10px;
+      font-size: 1.2rem;
+      letter-spacing: 4px;
+      text-align: center;
+      margin: 12px 0;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .pin-btns { display: flex; gap: 8px; }
+    .pin-btns button {
+      flex: 1; padding: 8px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="header-left">
+      <span class="status-dot" id="liveDot"></span>
+      <span>Dienstplan-Spiegel</span>
+    </div>
+    <div class="header-controls">
+      <button class="btn-top" id="btnToggleNames">👤 Vornamen</button>
+    </div>
+  </header>
+
+  <div class="month-bar">
+    <button class="nav-btn" id="btnPrevMonth">&#8249;</button>
+    <span class="month-title" id="displayMonth">Lade...</span>
+    <button class="nav-btn" id="btnNextMonth">&#8250;</button>
+  </div>
+
+  <div class="grid-wrapper">
+    <table id="matrixTable">
+      <thead>
+        <tr id="rowWochentage"></tr>
+        <tr id="rowTage"></tr>
+      </thead>
+      <tbody id="matrixBody"></tbody>
+    </table>
+  </div>
+
+  <div class="pin-overlay" id="pinModal">
+    <div class="pin-card">
+      <h3 style="font-size: 1rem;">Vornamen freischalten</h3>
+      <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="Passwort / PIN">
+      <div class="pin-btns">
+        <button style="background: #eceff1;" id="btnPinCancel">Abbrechen</button>
+        <button style="background: var(--primary); color: white;" id="btnPinSubmit">OK</button>
+      </div>
+    </div>
+  </div>
+
 <script>
   const FIREBASE_DB_URL = "https://dienstplan-2cad6-default-rtdb.europe-west1.firebasedatabase.app/dienstplan.json";
-  
-  // WICHTIG: Exakt dasselbe Passwort wie in Excel VBA eintragen:
-  const SYNC_SECRET_KEY = "WAF711000";
+  const SYNC_SECRET_KEY = "StrengGeheimDienstplan2026!#";
 
-  let gAllData = {};
+  let gDataShifts = {};
+  let gDataMeta = {};
+  let gServerPin = "7110000"; // Fallback bis zum ersten Payload-Empfang
+  let gShowNames = false;
   let gCurrentDate = new Date();
-  let gSelectedKennung = localStorage.getItem("dp_mobile_kennung") || "";
 
-  const displayMonth = document.getElementById("displayMonth");
-  const scheduleContainer = document.getElementById("scheduleContainer");
   const liveDot = document.getElementById("liveDot");
-  const inputKennung = document.getElementById("inputKennung");
-  const btnSaveKennung = document.getElementById("btnSaveKennung");
-  const labelUser = document.getElementById("labelUser");
+  const displayMonth = document.getElementById("displayMonth");
+  const rowWochentage = document.getElementById("rowWochentage");
+  const rowTage = document.getElementById("rowTage");
+  const matrixBody = document.getElementById("matrixBody");
+  const btnToggleNames = document.getElementById("btnToggleNames");
+  const pinModal = document.getElementById("pinModal");
+  const pinInput = document.getElementById("pinInput");
 
-  if (gSelectedKennung) {
-    inputKennung.value = gSelectedKennung;
-    labelUser.textContent = `ID: ${gSelectedKennung}`;
-  }
-
-  // --- NATIVE ENTSCHLÜSSELUNG (RC4 Hex zu Klartext-JSON) ---
+  // --- RC4 DECRYPT ---
   function decryptRC4Hex(hexStr, password) {
     try {
       if (!hexStr || !password) return null;
-      let s = new Array(256);
-      let k = new Array(256);
+      let s = new Array(256), k = new Array(256);
       for (let i = 0; i < 256; i++) {
         s[i] = i;
         k[i] = password.charCodeAt(i % password.length);
@@ -36,149 +294,179 @@
         let temp = s[i]; s[i] = s[j]; s[j] = temp;
       }
       let i = 0; j = 0;
-      let outChars = [];
+      let out = [];
       for (let x = 0; x < hexStr.length; x += 2) {
         i = (i + 1) % 256;
         j = (j + s[i]) % 256;
         let temp = s[i]; s[i] = s[j]; s[j] = temp;
         let t = (s[i] + s[j]) % 256;
-
-        let cipherByte = parseInt(hexStr.substr(x, 2), 16);
-        let plainByte = cipherByte ^ s[t];
-        outChars.push(String.fromCharCode(plainByte));
+        let val = parseInt(hexStr.substr(x, 2), 16) ^ s[t];
+        out.push(String.fromCharCode(val));
       }
-      const jsonText = outChars.join("");
-      return JSON.parse(jsonText);
-    } catch (err) {
-      console.error("Entschlüsselung fehlgeschlagen:", err);
+      return JSON.parse(out.join(""));
+    } catch (e) {
       return null;
     }
   }
 
-  function processReceivedData(rawData) {
-    if (!rawData) return;
-    
-    // Prüfen, ob die Daten verschlüsselt vorliegen:
-    if (rawData.payload) {
-      const decrypted = decryptRC4Hex(rawData.payload, SYNC_SECRET_KEY);
-      if (decrypted) {
-        gAllData = decrypted;
-      }
-    } else {
-      // Fallback: Falls noch unverschlüsselte Altdaten in Firebase liegen
-      gAllData = rawData;
+  function processPayload(raw) {
+    if (!raw) return;
+    let obj = raw;
+    if (raw.payload) {
+      obj = decryptRC4Hex(raw.payload, SYNC_SECRET_KEY);
     }
-    renderSchedule();
+    if (obj) {
+      gDataShifts = obj.shifts || obj;
+      gDataMeta = obj.meta || {};
+      if (obj.pin) gServerPin = String(obj.pin);
+      renderMatrix();
+    }
   }
 
-  // --- ECHTZEIT-STREAM AUS FIREBASE ---
-  function startFirebaseSync() {
+  function startSync() {
     const sse = new EventSource(FIREBASE_DB_URL);
-
     sse.addEventListener("put", (e) => {
       liveDot.classList.add("online");
       const res = JSON.parse(e.data);
-      if (res.path === "/" && res.data) {
-        processReceivedData(res.data);
-      } else if (res.data) {
-        // Falls direkte Teil-Payloads aktualisiert werden
-        fetchInitialData();
-      }
+      if (res.data) processPayload(res.data);
     });
-
-    sse.onerror = () => {
-      liveDot.classList.remove("online");
-    };
+    sse.onerror = () => liveDot.classList.remove("online");
   }
 
-  async function fetchInitialData() {
+  async function initialFetch() {
     try {
       const res = await fetch(FIREBASE_DB_URL);
       if (res.ok) {
         const raw = await res.json();
         liveDot.classList.add("online");
-        processReceivedData(raw);
+        processPayload(raw);
       }
-    } catch (err) {
-      console.warn("Initialer Fetch fehlgeschlagen:", err);
+    } catch (e) {
+      console.warn("Fetch failed:", e);
     }
   }
 
-  // --- RENDERING LOGIK ---
-  function renderSchedule() {
-    if (!gSelectedKennung) {
-      scheduleContainer.innerHTML = '<div class="empty-state">Bitte gib oben deine 3 Ziffern ein.</div>';
-      return;
-    }
-
+  // --- MATRIX RENDERN ---
+  function renderMatrix() {
     const year = gCurrentDate.getFullYear();
     const month = gCurrentDate.getMonth();
-    
     const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
     displayMonth.textContent = `${monthNames[month]} ${year}`;
 
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const dayNames = ["SO", "MO", "DI", "MI", "DO", "FR", "SA"];
+    const daysCount = new Date(year, month + 1, 0).getDate();
+    const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    const userShifts = gAllData[gSelectedKennung] || {};
-    let html = "";
+    // Header Zeile 1 (Wochentag) & 2 (Datum)
+    let thWochentag = `<th class="col-id">Funktion</th>`;
+    let thTage = `<th class="col-id">Kennung</th>`;
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const dayDate = new Date(year, month, day);
-      const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      const dayOfWeek = dayDate.getDay();
-      const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-      const isToday = (isoDate === todayStr);
+    for (let d = 1; d <= daysCount; d++) {
+      const dObj = new Date(year, month, d);
+      const dayOfWeek = dObj.getDay();
+      const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const isToday = (iso === todayStr);
 
-      const rawShift = userShifts[isoDate] || "";
-      const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
-
-      let badgeClass = "day-badge";
-      if (baseShift) {
-        badgeClass += ` badge-${baseShift}`;
-      }
-
-      html += `
-        <div class="day-row ${isWeekend ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">
-          <div class="day-date-group">
-            <span class="day-name">${dayNames[dayOfWeek]}</span>
-            <span class="day-num">${day}.</span>
-          </div>
-          <span class="${badgeClass}">${rawShift || "—"}</span>
-        </div>
-      `;
+      thWochentag += `<th class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">${dayNames[dayOfWeek]}</th>`;
+      thTage += `<th class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">${String(d).padStart(2, '0')}.</th>`;
     }
 
-    scheduleContainer.innerHTML = html;
+    rowWochentage.innerHTML = thWochentag;
+    rowTage.innerHTML = thTage;
+
+    // Zeilen sortieren: DGL -> EB -> OSINT -> FLDL -> FLD
+    const userKeys = Object.keys(gDataShifts);
+    const fktOrder = { "DGL": 1, "EB": 2, "OSINT": 3, "FLDL": 4, "FLD": 5 };
+    userKeys.sort((a, b) => {
+      const fktA = (gDataMeta[a] && gDataMeta[a].fkt) ? (fktOrder[gDataMeta[a].fkt] || 99) : 99;
+      const fktB = (gDataMeta[b] && gDataMeta[b].fkt) ? (fktOrder[gDataMeta[b].fkt] || 99) : 99;
+      if (fktA !== fktB) return fktA - fktB;
+      return a.localeCompare(b);
+    });
+
+    let tbodyHtml = "";
+
+    userKeys.forEach(uid => {
+      const shifts = gDataShifts[uid] || {};
+      const meta = gDataMeta[uid] || {};
+      
+      // Beschriftung: Bei Schalteraktivierung Vorname, sonst "FKT 081"
+      let label = uid;
+      if (gShowNames && meta.vorname) {
+        label = meta.vorname;
+      } else if (meta.fkt) {
+        label = `${meta.fkt} ${uid}`;
+      }
+
+      let rowHtml = `<tr><td class="col-id" title="${uid}">${label}</td>`;
+
+      for (let d = 1; d <= daysCount; d++) {
+        const dObj = new Date(year, month, d);
+        const dayOfWeek = dObj.getDay();
+        const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
+        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const isToday = (iso === todayStr);
+
+        const rawShift = shifts[iso] || "";
+        const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
+
+        let cls = "";
+        if (baseShift) cls = `shift-${baseShift}`;
+
+        rowHtml += `<td class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''} ${cls}">${rawShift}</td>`;
+      }
+
+      rowHtml += `</tr>`;
+      tbodyHtml += rowHtml;
+    });
+
+    matrixBody.innerHTML = tbodyHtml;
   }
 
-  // --- INTERAKTION ---
-  btnSaveKennung.addEventListener("click", () => {
-    const val = inputKennung.value.trim().padStart(3, "0");
-    if (val.length === 3) {
-      gSelectedKennung = val;
-      localStorage.setItem("dp_mobile_kennung", val);
-      labelUser.textContent = `ID: ${val}`;
-      renderSchedule();
+  // --- PIN-UMSCHALTUNG ---
+  btnToggleNames.addEventListener("click", () => {
+    if (gShowNames) {
+      gShowNames = false;
+      btnToggleNames.classList.remove("active-names");
+      btnToggleNames.textContent = "👤 Vornamen";
+      renderMatrix();
+    } else {
+      pinInput.value = "";
+      pinModal.style.display = "flex";
+      pinInput.focus();
     }
   });
 
-  inputKennung.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") btnSaveKennung.click();
+  document.getElementById("btnPinCancel").addEventListener("click", () => {
+    pinModal.style.display = "none";
+  });
+
+  document.getElementById("btnPinSubmit").addEventListener("click", () => {
+    if (pinInput.value === gServerPin) {
+      gShowNames = true;
+      btnToggleNames.classList.add("active-names");
+      btnToggleNames.textContent = "🔒 Anonym";
+      pinModal.style.display = "none";
+      renderMatrix();
+    } else {
+      alert("Falsche PIN!");
+      pinInput.value = "";
+    }
   });
 
   document.getElementById("btnPrevMonth").addEventListener("click", () => {
     gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
-    renderSchedule();
+    renderMatrix();
   });
-
   document.getElementById("btnNextMonth").addEventListener("click", () => {
     gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
-    renderSchedule();
+    renderMatrix();
   });
 
-  // Start
-  fetchInitialData();
-  startFirebaseSync();
+  initialFetch();
+  startSync();
 </script>
+
+</body>
+</html>
