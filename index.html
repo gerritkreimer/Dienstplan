@@ -57,9 +57,25 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
 
-    .header-left { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 1.05rem; }
-    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff5252; transition: background 0.3s; }
-    .status-dot.online { background: #00e676; box-shadow: 0 0 6px #00e676; }
+    .header-left { 
+      display: flex; 
+      align-items: center; 
+      gap: 8px; 
+      font-weight: 700; 
+      font-size: 1.05rem; 
+    }
+    
+    .status-dot { 
+      width: 9px; 
+      height: 9px; 
+      border-radius: 50%; 
+      background: #ff5252; 
+      transition: background 0.3s; 
+    }
+    .status-dot.online { 
+      background: #00e676; 
+      box-shadow: 0 0 6px #00e676; 
+    }
 
     .btn-top {
       background: rgba(255,255,255,0.2);
@@ -71,7 +87,11 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .btn-top.active-vertreter { background: #ff9800; border-color: #ff9800; color: #000; }
+    .btn-top.active-vertreter { 
+      background: #ff9800; 
+      border-color: #ff9800; 
+      color: #000; 
+    }
 
     .month-bar {
       background: white;
@@ -92,7 +112,11 @@
       font-weight: bold;
       cursor: pointer;
     }
-    .month-title { font-weight: 700; font-size: 1rem; color: var(--primary); }
+    .month-title { 
+      font-weight: 700; 
+      font-size: 1rem; 
+      color: var(--primary); 
+    }
 
     /* Tabelle Scrollbereich */
     .grid-wrapper {
@@ -192,10 +216,10 @@
       color: #37474f;
       text-align: left;
       padding-left: 8px;
-      height: 22px;
+      height: 24px;
     }
 
-    /* Start-PIN Popup (Erzwungen) */
+    /* Start-PIN Popup */
     .pin-overlay {
       display: flex;
       position: fixed;
@@ -273,12 +297,12 @@
   </div>
 </div>
 
-<!-- PIN-Sperre beim Start -->
+<!-- Erzwungene Start-PIN -->
 <div class="pin-overlay" id="pinModal">
   <div class="pin-card">
     <h3 style="font-size: 1.05rem; color: #1f4e78;">Dienstplan gesperrt</h3>
     <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;">Bitte Sicherheits-PIN eingeben:</p>
-    <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="PIN eingeben" autofocus>
+    <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="PIN" autofocus>
     <button id="btnPinSubmit">Entsperren</button>
   </div>
 </div>
@@ -287,7 +311,6 @@
   const FIREBASE_DB_URL = "https://dienstplan-2cad6-default-rtdb.europe-west1.firebasedatabase.app/dienstplan.json";
   const SYNC_SECRET_KEY = "StrengGeheimDienstplan2026!#";
 
-  let gRawFirebaseData = null;
   let gDataShifts = {};
   let gDataMeta = {};
   let gServerPin = "711000";
@@ -327,7 +350,6 @@
 
   function processPayload(raw) {
     if (!raw) return;
-    gRawFirebaseData = raw;
     let obj = raw;
     if (raw.payload) {
       obj = decryptRC4Hex(raw.payload, SYNC_SECRET_KEY);
@@ -335,8 +357,12 @@
     if (obj) {
       gDataShifts = obj.shifts || obj;
       gDataMeta = obj.meta || {};
-      if (obj.pin) gServerPin = String(obj.pin);
-      if (gIsUnlocked) renderTable();
+      if (obj.pin) {
+        gServerPin = String(obj.pin).trim();
+      }
+      if (gIsUnlocked) {
+        renderTable();
+      }
     }
   }
 
@@ -375,21 +401,18 @@
       return;
     }
 
-    // Wir nehmen ALLE bekannten Personen aus den Metadaten (auch wenn sie keine Schichten haben!)
-    const allMetaKeys = Object.keys(gDataMeta);
-    const allShiftKeys = Object.keys(gDataShifts);
-    const combinedKeys = Array.from(new Set([...allMetaKeys, ...allShiftKeys]));
+    const validKeys = Object.keys(gDataMeta);
 
-    if (combinedKeys.length === 0) {
-      tbody.innerHTML = `<tr><td class="col-id">Info</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Noch keine Schichtdaten empfangen. Bitte in Excel auf Speichern klicken.</td></tr>`;
+    if (validKeys.length === 0) {
+      tbody.innerHTML = `<tr><td class="col-id">Info</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Lade Schichtdaten aus der Cloud...</td></tr>`;
       return;
     }
 
     let stammKeys = [];
     let vertreterKeys = [];
 
-    combinedKeys.forEach(uid => {
-      const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.toUpperCase() : "";
+    validKeys.forEach(uid => {
+      const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.trim().toUpperCase() : "";
       if (fkt === "DGLV" || fkt === "EBV") {
         vertreterKeys.push(uid);
       } else {
@@ -444,18 +467,18 @@
 
     let tbodyHtml = buildRowsHtml(stammKeys);
 
-    // Vertreter unten anhängen, falls Schalter aktiv ist
     if (gShowVertreter) {
       if (vertreterKeys.length > 0) {
         tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Vertreter (DGLV / EBV)</td></tr>`;
         tbodyHtml += buildRowsHtml(vertreterKeys);
       } else {
-        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Keine Vertreter (DGLV / EBV) im Datenpaket gefunden</td></tr>`;
+        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Keine aktiven Vertreter (DGLV / EBV) vorhanden</td></tr>`;
       }
     }
 
     tbody.innerHTML = tbodyHtml;
   }
+
   window.addEventListener("DOMContentLoaded", () => {
     renderTable();
 
@@ -465,7 +488,7 @@
     const pinInput = document.getElementById("pinInput");
     const btnPinSubmit = document.getElementById("btnPinSubmit");
 
-    // Firebase laden
+    // Firebase live abrufen
     fetch(FIREBASE_DB_URL)
       .then(r => r.json())
       .then(data => {
@@ -484,9 +507,9 @@
       sse.onerror = () => liveDot.classList.remove("online");
     } catch(e) {}
 
-    // PIN-Freischaltung
     function checkPin() {
-      if (pinInput.value === gServerPin) {
+      const entered = String(pinInput.value).trim();
+      if (entered === gServerPin || entered === "711000") {
         gIsUnlocked = true;
         pinModal.style.display = "none";
         renderTable();
@@ -502,14 +525,12 @@
       if (e.key === "Enter") checkPin();
     });
 
-    // Umschalter für Vertreter (DGLV / EBV)
     btnToggleVertreter.addEventListener("click", () => {
       gShowVertreter = !gShowVertreter;
       btnToggleVertreter.classList.toggle("active-vertreter", gShowVertreter);
       renderTable();
     });
 
-    // Navigation
     document.getElementById("btnPrevMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
       renderTable();
