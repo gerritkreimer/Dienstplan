@@ -375,17 +375,20 @@
       return;
     }
 
-    const allKeys = Object.keys(gDataShifts);
-    if (allKeys.length === 0) {
+    // Wir nehmen ALLE bekannten Personen aus den Metadaten (auch wenn sie keine Schichten haben!)
+    const allMetaKeys = Object.keys(gDataMeta);
+    const allShiftKeys = Object.keys(gDataShifts);
+    const combinedKeys = Array.from(new Set([...allMetaKeys, ...allShiftKeys]));
+
+    if (combinedKeys.length === 0) {
       tbody.innerHTML = `<tr><td class="col-id">Info</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Noch keine Schichtdaten empfangen. Bitte in Excel auf Speichern klicken.</td></tr>`;
       return;
     }
 
-    // Trennung in Stamm-Mitarbeiter und Vertreter (DGLV / EBV)
     let stammKeys = [];
     let vertreterKeys = [];
 
-    allKeys.forEach(uid => {
+    combinedKeys.forEach(uid => {
       const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.toUpperCase() : "";
       if (fkt === "DGLV" || fkt === "EBV") {
         vertreterKeys.push(uid);
@@ -410,7 +413,6 @@
         const shifts = gDataShifts[uid] || {};
         const meta = gDataMeta[uid] || {};
         
-        // Vornamen als Standardbeschriftung
         let label = meta.vorname ? meta.vorname : uid;
         if (meta.fkt && (meta.fkt === "DGLV" || meta.fkt === "EBV")) {
           label = `${meta.fkt} ${label}`;
@@ -443,14 +445,17 @@
     let tbodyHtml = buildRowsHtml(stammKeys);
 
     // Vertreter unten anhängen, falls Schalter aktiv ist
-    if (gShowVertreter && vertreterKeys.length > 0) {
-      tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Vertreter (DGLV / EBV)</td></tr>`;
-      tbodyHtml += buildRowsHtml(vertreterKeys);
+    if (gShowVertreter) {
+      if (vertreterKeys.length > 0) {
+        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Vertreter (DGLV / EBV)</td></tr>`;
+        tbodyHtml += buildRowsHtml(vertreterKeys);
+      } else {
+        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Keine Vertreter (DGLV / EBV) im Datenpaket gefunden</td></tr>`;
+      }
     }
 
     tbody.innerHTML = tbodyHtml;
   }
-
   window.addEventListener("DOMContentLoaded", () => {
     renderTable();
 
