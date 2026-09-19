@@ -71,7 +71,7 @@
       font-weight: 600;
       cursor: pointer;
     }
-    .btn-top.active-names { background: #ff9800; border-color: #ff9800; color: #000; }
+    .btn-top.active-vertreter { background: #ff9800; border-color: #ff9800; color: #000; }
 
     .month-bar {
       background: white;
@@ -185,37 +185,59 @@
     .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg); font-weight: 700; }
     .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg); font-weight: 700; }
 
+    /* Trennzeile für Vertreter */
+    .row-separator td {
+      background: #cfd8dc !important;
+      font-weight: 700;
+      color: #37474f;
+      text-align: left;
+      padding-left: 8px;
+      height: 22px;
+    }
+
+    /* Start-PIN Popup (Erzwungen) */
     .pin-overlay {
-      display: none;
+      display: flex;
       position: fixed;
       inset: 0;
-      background: rgba(0,0,0,0.5);
-      z-index: 100;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      z-index: 1000;
       align-items: center;
       justify-content: center;
     }
     .pin-card {
       background: white;
-      padding: 20px;
+      padding: 24px;
       border-radius: 12px;
       text-align: center;
-      width: 280px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      width: 290px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.4);
     }
     .pin-card input {
       width: 100%;
       padding: 10px;
-      font-size: 1.2rem;
+      font-size: 1.3rem;
       letter-spacing: 4px;
       text-align: center;
-      margin: 12px 0;
-      border: 1px solid var(--border);
+      margin: 16px 0;
+      border: 2px solid var(--border);
       border-radius: 6px;
       outline: none;
     }
-    .pin-btns { display: flex; gap: 8px; }
-    .pin-btns button {
-      flex: 1; padding: 8px; border-radius: 6px; border: none; font-weight: 600; cursor: pointer;
+    .pin-card input:focus {
+      border-color: var(--primary);
+    }
+    .pin-card button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      font-weight: 700;
+      background: var(--primary);
+      color: white;
+      font-size: 0.95rem;
+      cursor: pointer;
     }
   </style>
 </head>
@@ -228,7 +250,7 @@
       <span>Dienstplan-Spiegel</span>
     </div>
     <div>
-      <button class="btn-top" id="btnToggleNames">👤 Vornamen</button>
+      <button class="btn-top" id="btnToggleVertreter">👥 Vertreter</button>
     </div>
   </header>
 
@@ -245,20 +267,19 @@
         <tr id="rowTage"></tr>
       </thead>
       <tbody id="matrixBody">
-        <tr><td class="col-id">Status</td><td colspan="31" style="text-align:left; padding-left:14px; color:#546e7a;">Warte auf Daten aus Firebase...</td></tr>
+        <tr><td class="col-id">Status</td><td colspan="31" style="text-align:left; padding-left:14px; color:#546e7a;">Bitte PIN eingeben zum Entsperren...</td></tr>
       </tbody>
     </table>
   </div>
 </div>
 
+<!-- PIN-Sperre beim Start -->
 <div class="pin-overlay" id="pinModal">
   <div class="pin-card">
-    <h3 style="font-size: 1rem;">Vornamen freischalten</h3>
-    <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="PIN eingeben">
-    <div class="pin-btns">
-      <button style="background: #eceff1;" id="btnPinCancel">Abbrechen</button>
-      <button style="background: var(--primary); color: white;" id="btnPinSubmit">OK</button>
-    </div>
+    <h3 style="font-size: 1.05rem; color: #1f4e78;">Dienstplan gesperrt</h3>
+    <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;">Bitte Sicherheits-PIN eingeben:</p>
+    <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="PIN eingeben" autofocus>
+    <button id="btnPinSubmit">Entsperren</button>
   </div>
 </div>
 
@@ -266,10 +287,12 @@
   const FIREBASE_DB_URL = "https://dienstplan-2cad6-default-rtdb.europe-west1.firebasedatabase.app/dienstplan.json";
   const SYNC_SECRET_KEY = "StrengGeheimDienstplan2026!#";
 
+  let gRawFirebaseData = null;
   let gDataShifts = {};
   let gDataMeta = {};
   let gServerPin = "7110000";
-  let gShowNames = false;
+  let gIsUnlocked = false;
+  let gShowVertreter = false;
   let gCurrentDate = new Date();
 
   function decryptRC4Hex(hexStr, password) {
@@ -304,6 +327,7 @@
 
   function processPayload(raw) {
     if (!raw) return;
+    gRawFirebaseData = raw;
     let obj = raw;
     if (raw.payload) {
       obj = decryptRC4Hex(raw.payload, SYNC_SECRET_KEY);
@@ -312,7 +336,7 @@
       gDataShifts = obj.shifts || obj;
       gDataMeta = obj.meta || {};
       if (obj.pin) gServerPin = String(obj.pin);
-      renderTable();
+      if (gIsUnlocked) renderTable();
     }
   }
 
@@ -327,8 +351,8 @@
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
     const todayStr = new Date().toISOString().slice(0, 10);
 
-    let thWochentag = `<th class="col-id">Funktion</th>`;
-    let thTage = `<th class="col-id">Kennung</th>`;
+    let thWochentag = `<th class="col-id">Name</th>`;
+    let thTage = `<th class="col-id">Datum</th>`;
 
     for (let d = 1; d <= daysCount; d++) {
       const dObj = new Date(year, month, d);
@@ -344,55 +368,85 @@
     document.getElementById("rowWochentage").innerHTML = thWochentag;
     document.getElementById("rowTage").innerHTML = thTage;
 
-    const userKeys = Object.keys(gDataShifts);
     const tbody = document.getElementById("matrixBody");
 
-    if (userKeys.length === 0) {
+    if (!gIsUnlocked) {
+      tbody.innerHTML = `<tr><td class="col-id">Gesperrt</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Bitte PIN eingeben zum Entsperren...</td></tr>`;
+      return;
+    }
+
+    const allKeys = Object.keys(gDataShifts);
+    if (allKeys.length === 0) {
       tbody.innerHTML = `<tr><td class="col-id">Info</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Noch keine Schichtdaten empfangen. Bitte in Excel auf Speichern klicken.</td></tr>`;
       return;
     }
 
-    // SORTIERUNG: Strikt nach dem vom Excel-Planer übergebenen Original-Sortierindex (sort)
-    userKeys.sort((a, b) => {
+    // Trennung in Stamm-Mitarbeiter und Vertreter (DGLV / EBV)
+    let stammKeys = [];
+    let vertreterKeys = [];
+
+    allKeys.forEach(uid => {
+      const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.toUpperCase() : "";
+      if (fkt === "DGLV" || fkt === "EBV") {
+        vertreterKeys.push(uid);
+      } else {
+        stammKeys.push(uid);
+      }
+    });
+
+    const sortFn = (a, b) => {
       const sortA = (gDataMeta[a] && gDataMeta[a].sort !== undefined) ? gDataMeta[a].sort : 999;
       const sortB = (gDataMeta[b] && gDataMeta[b].sort !== undefined) ? gDataMeta[b].sort : 999;
       if (sortA !== sortB) return sortA - sortB;
       return a.localeCompare(b);
-    });
+    };
 
-    let tbodyHtml = "";
-    userKeys.forEach(uid => {
-      const shifts = gDataShifts[uid] || {};
-      const meta = gDataMeta[uid] || {};
-      
-      let label = uid;
-      if (gShowNames && meta.vorname) {
-        label = meta.vorname;
-      } else if (meta.fkt) {
-        label = `${meta.fkt} ${uid}`;
-      }
+    stammKeys.sort(sortFn);
+    vertreterKeys.sort(sortFn);
 
-      let rowHtml = `<tr><td class="col-id" title="${uid}">${label}</td>`;
+    function buildRowsHtml(keysList) {
+      let html = "";
+      keysList.forEach(uid => {
+        const shifts = gDataShifts[uid] || {};
+        const meta = gDataMeta[uid] || {};
+        
+        // Vornamen als Standardbeschriftung
+        let label = meta.vorname ? meta.vorname : uid;
+        if (meta.fkt && (meta.fkt === "DGLV" || meta.fkt === "EBV")) {
+          label = `${meta.fkt} ${label}`;
+        }
 
-      for (let d = 1; d <= daysCount; d++) {
-        const dObj = new Date(year, month, d);
-        const dayOfWeek = dObj.getDay();
-        const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
-        const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        const isToday = (iso === todayStr);
+        let rowHtml = `<tr><td class="col-id" title="${uid}">${label}</td>`;
 
-        const rawShift = shifts[iso] || "";
-        const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
+        for (let d = 1; d <= daysCount; d++) {
+          const dObj = new Date(year, month, d);
+          const dayOfWeek = dObj.getDay();
+          const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
+          const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const isToday = (iso === todayStr);
 
-        let cls = "";
-        if (baseShift) cls = `shift-${baseShift}`;
+          const rawShift = shifts[iso] || "";
+          const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
 
-        rowHtml += `<td class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''} ${cls}">${rawShift}</td>`;
-      }
+          let cls = "";
+          if (baseShift) cls = `shift-${baseShift}`;
 
-      rowHtml += `</tr>`;
-      tbodyHtml += rowHtml;
-    });
+          rowHtml += `<td class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''} ${cls}">${rawShift}</td>`;
+        }
+
+        rowHtml += `</tr>`;
+        html += rowHtml;
+      });
+      return html;
+    }
+
+    let tbodyHtml = buildRowsHtml(stammKeys);
+
+    // Vertreter unten anhängen, falls Schalter aktiv ist
+    if (gShowVertreter && vertreterKeys.length > 0) {
+      tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Vertreter (DGLV / EBV)</td></tr>`;
+      tbodyHtml += buildRowsHtml(vertreterKeys);
+    }
 
     tbody.innerHTML = tbodyHtml;
   }
@@ -401,10 +455,12 @@
     renderTable();
 
     const liveDot = document.getElementById("liveDot");
-    const btnToggleNames = document.getElementById("btnToggleNames");
+    const btnToggleVertreter = document.getElementById("btnToggleVertreter");
     const pinModal = document.getElementById("pinModal");
     const pinInput = document.getElementById("pinInput");
+    const btnPinSubmit = document.getElementById("btnPinSubmit");
 
+    // Firebase laden
     fetch(FIREBASE_DB_URL)
       .then(r => r.json())
       .then(data => {
@@ -423,6 +479,32 @@
       sse.onerror = () => liveDot.classList.remove("online");
     } catch(e) {}
 
+    // PIN-Freischaltung
+    function checkPin() {
+      if (pinInput.value === gServerPin) {
+        gIsUnlocked = true;
+        pinModal.style.display = "none";
+        renderTable();
+      } else {
+        alert("Falsche PIN!");
+        pinInput.value = "";
+        pinInput.focus();
+      }
+    }
+
+    btnPinSubmit.addEventListener("click", checkPin);
+    pinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") checkPin();
+    });
+
+    // Umschalter für Vertreter (DGLV / EBV)
+    btnToggleVertreter.addEventListener("click", () => {
+      gShowVertreter = !gShowVertreter;
+      btnToggleVertreter.classList.toggle("active-vertreter", gShowVertreter);
+      renderTable();
+    });
+
+    // Navigation
     document.getElementById("btnPrevMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
       renderTable();
@@ -431,36 +513,6 @@
     document.getElementById("btnNextMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
       renderTable();
-    });
-
-    btnToggleNames.addEventListener("click", () => {
-      if (gShowNames) {
-        gShowNames = false;
-        btnToggleNames.classList.remove("active-names");
-        btnToggleNames.textContent = "👤 Vornamen";
-        renderTable();
-      } else {
-        pinInput.value = "";
-        pinModal.style.display = "flex";
-        pinInput.focus();
-      }
-    });
-
-    document.getElementById("btnPinCancel").addEventListener("click", () => {
-      pinModal.style.display = "none";
-    });
-
-    document.getElementById("btnPinSubmit").addEventListener("click", () => {
-      if (pinInput.value === gServerPin) {
-        gShowNames = true;
-        btnToggleNames.classList.add("active-names");
-        btnToggleNames.textContent = "🔒 Anonym";
-        pinModal.style.display = "none";
-        renderTable();
-      } else {
-        alert("Falsche PIN!");
-        pinInput.value = "";
-      }
     });
   });
 </script>
