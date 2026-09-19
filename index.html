@@ -401,9 +401,10 @@
       return;
     }
 
-    const validKeys = Object.keys(gDataMeta);
+    // ENTSCHEIDEND: Nur IDs anzeigen, die in gDataMeta vorhanden sind (keine alten Shift-Reste!)
+    const activeKeys = Object.keys(gDataMeta);
 
-    if (validKeys.length === 0) {
+    if (activeKeys.length === 0) {
       tbody.innerHTML = `<tr><td class="col-id">Info</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Lade Schichtdaten aus der Cloud...</td></tr>`;
       return;
     }
@@ -411,7 +412,7 @@
     let stammKeys = [];
     let vertreterKeys = [];
 
-    validKeys.forEach(uid => {
+    activeKeys.forEach(uid => {
       const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.trim().toUpperCase() : "";
       if (fkt === "DGLV" || fkt === "EBV") {
         vertreterKeys.push(uid);
@@ -472,13 +473,12 @@
         tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Vertreter (DGLV / EBV)</td></tr>`;
         tbodyHtml += buildRowsHtml(vertreterKeys);
       } else {
-        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Keine aktiven Vertreter (DGLV / EBV) vorhanden</td></tr>`;
+        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Keine aktiven Vertreter vorhanden</td></tr>`;
       }
     }
 
     tbody.innerHTML = tbodyHtml;
   }
-
   window.addEventListener("DOMContentLoaded", () => {
     renderTable();
 
