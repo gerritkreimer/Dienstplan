@@ -77,6 +77,12 @@
       box-shadow: 0 0 6px #00e676; 
     }
 
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .btn-top {
       background: rgba(255,255,255,0.2);
       border: 1px solid rgba(255,255,255,0.3);
@@ -116,6 +122,8 @@
       font-weight: 700; 
       font-size: 1rem; 
       color: var(--primary); 
+      cursor: pointer;
+      user-select: none;
     }
 
     /* Tabelle Scrollbereich */
@@ -125,6 +133,7 @@
       background: #cfd8dc;
       position: relative;
       -webkit-overflow-scrolling: touch;
+      scroll-behavior: smooth;
     }
 
     table {
@@ -198,7 +207,13 @@
 
     th.is-weekend { background: var(--c-we-hdr) !important; color: #c62828 !important; }
     td.is-weekend { background: var(--c-we-col); }
-    th.is-today, td.is-today { outline: 2px solid var(--primary); outline-offset: -2px; }
+    
+    /* Hervorhebung aktueller Tag */
+    th.is-today, td.is-today { 
+      outline: 2px solid #1565c0; 
+      outline-offset: -2px; 
+      background-color: #e3f2fd !important;
+    }
 
     .shift-F  { background: var(--c-f-bg) !important; color: var(--c-f-fg); font-weight: 700; }
     .shift-S  { background: var(--c-s-bg) !important; color: var(--c-s-fg); font-weight: 700; }
@@ -273,18 +288,19 @@
       <span class="status-dot" id="liveDot" title="Rot = Verbinde, Grün = Live"></span>
       <span>Dienstplan-Spiegel</span>
     </div>
-    <div>
+    <div class="header-actions">
+      <button class="btn-top" id="btnGoToday" title="Zum heutigen Tag springen">📅 Heute</button>
       <button class="btn-top" id="btnToggleVertreter">👥 Vertreter</button>
     </div>
   </header>
 
   <div class="month-bar">
     <button class="nav-btn" id="btnPrevMonth">&#8249;</button>
-    <span class="month-title" id="displayMonth">September 2026</span>
+    <span class="month-title" id="displayMonth" title="Klicken, um zum heutigen Tag zu springen">September 2026</span>
     <button class="nav-btn" id="btnNextMonth">&#8250;</button>
   </div>
 
-  <div class="grid-wrapper">
+  <div class="grid-wrapper" id="gridWrapper">
     <table id="matrixTable">
       <thead>
         <tr id="rowWochentage"></tr>
@@ -335,7 +351,7 @@
       let out = [];
       for (let x = 0; x < hexStr.length; x += 2) {
         i = (i + 1) % 256;
-        j = (j + s[i]) % 256;
+        j = (j + s(i)) % 256;
         let temp = s[i]; s[i] = s[j]; s[j] = temp;
         let t = (s[i] + s[j]) % 256;
         let val = parseInt(hexStr.substr(x, 2), 16) ^ s[t];
@@ -357,16 +373,36 @@
     if (obj) {
       gDataShifts = obj.shifts || obj;
       gDataMeta = obj.meta || {};
+      
+      if (Object.keys(gDataMeta).length === 0 && Object.keys(gDataShifts).length > 0) {
+        Object.keys(gDataShifts).forEach((uid, idx) => {
+          gDataMeta[uid] = { vorname: uid, fkt: "DGL", sort: idx + 1 };
+        });
+      }
+      
       if (obj.pin) {
         gServerPin = String(obj.pin).trim();
       }
       if (gIsUnlocked) {
-        renderTable();
+        renderTable(true);
       }
     }
   }
 
-  function renderTable() {
+  function scrollToToday() {
+    const todayCell = document.querySelector("th.is-today");
+    const wrapper = document.getElementById("gridWrapper");
+    if (todayCell && wrapper) {
+      // 110px feste Namensspalte berücksichtigen
+      const offset = todayCell.offsetLeft - 120;
+      wrapper.scrollTo({
+        left: Math.max(0, offset),
+        behavior: "smooth"
+      });
+    }
+  }
+
+  function renderTable(autoScroll = false) {
     const year = gCurrentDate.getFullYear();
     const month = gCurrentDate.getMonth();
     const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -375,7 +411,10 @@
 
     const daysCount = new Date(year, month + 1, 0).getDate();
     const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-    const todayStr = new Date().toISOString().slice(0, 10);
+    
+    const now = new Date();
+    const isCurrentMonth = (now.getFullYear() === year && now.getMonth() === month);
+    const todayDayNum = now.getDate();
 
     let thWochentag = `<th class="col-id">Name</th>`;
     let thTage = `<th class="col-id">Datum</th>`;
@@ -385,7 +424,7 @@
       const dayOfWeek = dObj.getDay();
       const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
       const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const isToday = (iso === todayStr);
+      const isToday = isCurrentMonth && (d === todayDayNum);
 
       thWochentag += `<th class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">${dayNames[dayOfWeek]}</th>`;
       thTage += `<th class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">${String(d).padStart(2, '0')}.</th>`;
@@ -401,7 +440,6 @@
       return;
     }
 
-    // ENTSCHEIDEND: Nur IDs anzeigen, die in gDataMeta vorhanden sind (keine alten Shift-Reste!)
     const activeKeys = Object.keys(gDataMeta);
 
     if (activeKeys.length === 0) {
@@ -449,7 +487,7 @@
           const dayOfWeek = dObj.getDay();
           const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
           const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-          const isToday = (iso === todayStr);
+          const isToday = isCurrentMonth && (d === todayDayNum);
 
           const rawShift = shifts[iso] || "";
           const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
@@ -478,12 +516,19 @@
     }
 
     tbody.innerHTML = tbodyHtml;
+
+    if (autoScroll) {
+      setTimeout(scrollToToday, 100);
+    }
   }
+
   window.addEventListener("DOMContentLoaded", () => {
     renderTable();
 
     const liveDot = document.getElementById("liveDot");
     const btnToggleVertreter = document.getElementById("btnToggleVertreter");
+    const btnGoToday = document.getElementById("btnGoToday");
+    const displayMonth = document.getElementById("displayMonth");
     const pinModal = document.getElementById("pinModal");
     const pinInput = document.getElementById("pinInput");
     const btnPinSubmit = document.getElementById("btnPinSubmit");
@@ -512,7 +557,7 @@
       if (entered === gServerPin || entered === "711000") {
         gIsUnlocked = true;
         pinModal.style.display = "none";
-        renderTable();
+        renderTable(true);
       } else {
         alert("Falsche PIN!");
         pinInput.value = "";
@@ -528,17 +573,26 @@
     btnToggleVertreter.addEventListener("click", () => {
       gShowVertreter = !gShowVertreter;
       btnToggleVertreter.classList.toggle("active-vertreter", gShowVertreter);
-      renderTable();
+      renderTable(false);
     });
+
+    // Klick auf "📅 Heute" oder auf den Monatsnamen springt direkt zum aktuellen Tag
+    function jumpToTodayAction() {
+      gCurrentDate = new Date();
+      renderTable(true);
+    }
+
+    btnGoToday.addEventListener("click", jumpToTodayAction);
+    displayMonth.addEventListener("click", jumpToTodayAction);
 
     document.getElementById("btnPrevMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
-      renderTable();
+      renderTable(false);
     });
 
     document.getElementById("btnNextMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
-      renderTable();
+      renderTable(false);
     });
   });
 </script>
