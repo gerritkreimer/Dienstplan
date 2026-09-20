@@ -208,7 +208,7 @@
     th.is-weekend { background: var(--c-we-hdr) !important; color: #c62828 !important; }
     td.is-weekend { background: var(--c-we-col); }
     
-    /* Hervorhebung aktueller Tag */
+    /* Aktueller Tag */
     th.is-today, td.is-today { 
       outline: 2px solid #1565c0; 
       outline-offset: -2px; 
@@ -224,7 +224,6 @@
     .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg); font-weight: 700; }
     .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg); font-weight: 700; }
 
-    /* Trennzeile für Vertreter */
     .row-separator td {
       background: #cfd8dc !important;
       font-weight: 700;
@@ -313,7 +312,6 @@
   </div>
 </div>
 
-<!-- Erzwungene Start-PIN -->
 <div class="pin-overlay" id="pinModal">
   <div class="pin-card">
     <h3 style="font-size: 1.05rem; color: #1f4e78;">Dienstplan gesperrt</h3>
@@ -351,7 +349,7 @@
       let out = [];
       for (let x = 0; x < hexStr.length; x += 2) {
         i = (i + 1) % 256;
-        j = (j + s(i)) % 256;
+        j = (j + s[i]) % 256;
         let temp = s[i]; s[i] = s[j]; s[j] = temp;
         let t = (s[i] + s[j]) % 256;
         let val = parseInt(hexStr.substr(x, 2), 16) ^ s[t];
@@ -373,13 +371,13 @@
     if (obj) {
       gDataShifts = obj.shifts || obj;
       gDataMeta = obj.meta || {};
-      
+
       if (Object.keys(gDataMeta).length === 0 && Object.keys(gDataShifts).length > 0) {
         Object.keys(gDataShifts).forEach((uid, idx) => {
           gDataMeta[uid] = { vorname: uid, fkt: "DGL", sort: idx + 1 };
         });
       }
-      
+
       if (obj.pin) {
         gServerPin = String(obj.pin).trim();
       }
@@ -393,7 +391,6 @@
     const todayCell = document.querySelector("th.is-today");
     const wrapper = document.getElementById("gridWrapper");
     if (todayCell && wrapper) {
-      // 110px feste Namensspalte berücksichtigen
       const offset = todayCell.offsetLeft - 120;
       wrapper.scrollTo({
         left: Math.max(0, offset),
@@ -533,7 +530,6 @@
     const pinInput = document.getElementById("pinInput");
     const btnPinSubmit = document.getElementById("btnPinSubmit");
 
-    // Firebase live abrufen
     fetch(FIREBASE_DB_URL)
       .then(r => r.json())
       .then(data => {
@@ -576,7 +572,6 @@
       renderTable(false);
     });
 
-    // Klick auf "📅 Heute" oder auf den Monatsnamen springt direkt zum aktuellen Tag
     function jumpToTodayAction() {
       gCurrentDate = new Date();
       renderTable(true);
