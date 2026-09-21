@@ -275,12 +275,13 @@
     .pin-card input {
       width: 100%;
       padding: 10px;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
       text-align: center;
       margin: 14px 0;
       border: 2px solid var(--border);
       border-radius: 6px;
       outline: none;
+      text-transform: uppercase;
     }
     .pin-card input:focus {
       border-color: var(--primary);
@@ -358,9 +359,9 @@
 <div class="pin-overlay" id="exportModal" style="display: none;">
   <div class="pin-card">
     <h3 style="font-size: 1.05rem; color: #1f4e78;" id="exportTitle">Monatsplan teilen</h3>
-    <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;" id="exportSubtitle">Sicherheitsabfrage: Bitte eigene Kennung bestätigen:</p>
+    <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;">Bitte vollständige NW-Kennung bestätigen (z. B. NW012345):</p>
     
-    <input type="text" id="exportKennungInput" placeholder="z.B. NW... oder 661" autofocus autocomplete="off">
+    <input type="text" id="exportKennungInput" placeholder="NW012345" autofocus autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
     
     <div class="btn-group">
       <button class="btn-action whatsapp" id="btnExportWhatsApp">📲 In WhatsApp teilen</button>
@@ -584,7 +585,6 @@
 
     tbody.innerHTML = tbodyHtml;
 
-    // Klick auf eine Namenszeile zum Exportieren
     document.querySelectorAll(".col-id[data-uid]").forEach(el => {
       el.addEventListener("click", () => {
         const uid = el.getAttribute("data-uid");
@@ -597,15 +597,12 @@
     }
   }
 
-  // Export-Dialog Logik
   function openExportDialog(uid) {
     gSelectedUid = uid;
     const meta = gDataMeta[uid] || {};
     const name = meta.vorname || uid;
     
     document.getElementById("exportTitle").textContent = `Dienstplan von ${name}`;
-    document.getElementById("exportSubtitle").textContent = `Bitte zur Bestätigung deine Kennung (z.B. ${uid.slice(-3)} oder ${uid}) eingeben:`;
-    
     const inp = document.getElementById("exportKennungInput");
     inp.value = "";
     document.getElementById("exportModal").style.display = "flex";
@@ -616,12 +613,9 @@
     const entered = document.getElementById("exportKennungInput").value.trim().toUpperCase();
     if (!entered) return false;
     
+    // Strikter Abgleich: Ausschließlich die vollständige Kennung (z.B. NW012345) ist gültig!
     const targetUid = gSelectedUid.toUpperCase();
-    // Erlaubt volle Kennung (z.B. NW053661) oder die letzten Ziffern (z.B. 661 oder 53661)
-    if (entered === targetUid || targetUid.endsWith(entered)) {
-      return true;
-    }
-    return false;
+    return (entered === targetUid);
   }
 
   function generateExportText() {
@@ -663,11 +657,11 @@
     const pinInput = document.getElementById("pinInput");
     const btnPinSubmit = document.getElementById("btnPinSubmit");
 
-    // Export Modal Buttons
     const exportModal = document.getElementById("exportModal");
     const btnExportWhatsApp = document.getElementById("btnExportWhatsApp");
     const btnExportCopy = document.getElementById("btnExportCopy");
     const btnExportCancel = document.getElementById("btnExportCancel");
+    const exportKennungInput = document.getElementById("exportKennungInput");
 
     fetch(FIREBASE_DB_URL)
       .then(r => r.json())
@@ -729,10 +723,11 @@
       renderTable(false);
     });
 
-    // WhatsApp Export Aktionen
     btnExportWhatsApp.addEventListener("click", () => {
       if (!validateExportKennung()) {
-        alert("Ungültige Kennung! Zugriff verweigert.");
+        alert("Ungültige NW-Kennung! Zugriff verweigert.");
+        exportKennungInput.value = "";
+        exportKennungInput.focus();
         return;
       }
       const text = generateExportText();
@@ -743,7 +738,9 @@
 
     btnExportCopy.addEventListener("click", () => {
       if (!validateExportKennung()) {
-        alert("Ungültige Kennung! Zugriff verweigert.");
+        alert("Ungültige NW-Kennung! Zugriff verweigert.");
+        exportKennungInput.value = "";
+        exportKennungInput.focus();
         return;
       }
       const text = generateExportText();
@@ -753,6 +750,12 @@
       }).catch(() => {
         alert("Kopieren fehlgeschlagen.");
       });
+    });
+
+    exportKennungInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        btnExportWhatsApp.click();
+      }
     });
 
     btnExportCancel.addEventListener("click", () => {
