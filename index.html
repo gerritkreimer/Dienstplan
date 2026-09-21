@@ -618,7 +618,7 @@
     return (entered === targetUid);
   }
 
- function generateExportText() {
+function generateExportText() {
     const year = gCurrentDate.getFullYear();
     const month = gCurrentDate.getMonth();
     const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -627,7 +627,6 @@
     
     const meta = gDataMeta[gSelectedUid] || {};
     const rawName = (meta.vorname || gSelectedUid).trim();
-    // Nur erster Buchstabe großgeschrieben + Punkt (z. B. "G.")
     const initial = rawName ? rawName.charAt(0).toUpperCase() + "." : "";
     const shifts = gDataShifts[gSelectedUid] || {};
 
@@ -638,16 +637,22 @@
       const dObj = new Date(year, month, d);
       const dayOfWeek = dObj.getDay();
       const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      const shift = shifts[iso] || " ";
+      const rawShift = (shifts[iso] || "").trim();
       const dayStr = String(d).padStart(2, '0');
-      
-      text += `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}. :  *${shift}*\n`;
+      const datumPrefix = `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}.`;
+
+      if (rawShift !== "") {
+        // Tag mit Dienst: Fett mit Sternchen
+        text += `${datumPrefix} :  *${rawShift}*\n`;
+      } else {
+        // Freier Tag: Komplett leer nach dem Datum (keine Sternchen!)
+        text += `${datumPrefix} :\n`;
+      }
     }
 
     text += `────────────────────\nStand: ${new Date().toLocaleDateString("de-DE")}`;
     return text;
   }
-
   window.addEventListener("DOMContentLoaded", () => {
     renderTable();
 
