@@ -206,9 +206,9 @@
     }
 
     .col-day {
-      width: 42px;
-      min-width: 42px;
-      max-width: 42px;
+      width: 44px;
+      min-width: 44px;
+      max-width: 44px;
     }
 
     th.is-weekend { background: var(--c-we-hdr) !important; color: #c62828 !important; }
@@ -237,6 +237,13 @@
     .shift-T  { background: var(--c-t-bg) !important; color: var(--c-t-fg) !important; font-weight: 700; }
     .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg) !important; font-weight: 700; }
     .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg) !important; font-weight: 700; }
+
+    /* Kompakte Darstellung bei LA mit Zeitangaben */
+    td.col-day.shift-LA {
+      font-size: 0.65rem;
+      padding: 1px 1px;
+      letter-spacing: -0.2px;
+    }
 
     /* Trennzeile & Header zwischen den Funktionsbereichen */
     .row-group-header td {
@@ -550,7 +557,11 @@
           const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
 
           let cls = "";
-          if (baseShift) cls = `shift-${baseShift}`;
+          if (baseShift.startsWith("LA")) {
+            cls = "shift-LA";
+          } else if (baseShift) {
+            cls = `shift-${baseShift}`;
+          }
 
           rowHtml += `<td class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''} ${cls}">${rawShift}</td>`;
         }
@@ -613,12 +624,11 @@
     const entered = document.getElementById("exportKennungInput").value.trim().toUpperCase();
     if (!entered) return false;
     
-    // Strikter Abgleich: Ausschließlich die vollständige Kennung (z.B. NW012345) ist gültig!
     const targetUid = gSelectedUid.toUpperCase();
     return (entered === targetUid);
   }
 
-function generateExportText() {
+  function generateExportText() {
     const year = gCurrentDate.getFullYear();
     const month = gCurrentDate.getMonth();
     const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -642,10 +652,8 @@ function generateExportText() {
       const datumPrefix = `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}.`;
 
       if (rawShift !== "") {
-        // Tag mit Dienst: Fett mit Sternchen
         text += `${datumPrefix} :  *${rawShift}*\n`;
       } else {
-        // Freier Tag: Komplett leer nach dem Datum (keine Sternchen!)
         text += `${datumPrefix} :\n`;
       }
     }
@@ -653,6 +661,7 @@ function generateExportText() {
     text += `────────────────────\nStand: ${new Date().toLocaleDateString("de-DE")}`;
     return text;
   }
+
   window.addEventListener("DOMContentLoaded", () => {
     renderTable();
 
