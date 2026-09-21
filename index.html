@@ -186,17 +186,23 @@
       text-align: left;
       padding-left: 8px;
       border-right: 2px solid var(--border-dark) !important;
+      cursor: pointer;
+    }
+    .col-id:hover {
+      background: #eceff1;
     }
 
     thead tr:nth-child(1) th.col-id {
       top: 0;
       z-index: 30;
       background: #dcdfe3;
+      cursor: default;
     }
     thead tr:nth-child(2) th.col-id {
       top: 26px;
       z-index: 30;
       background: #cfd4da;
+      cursor: default;
     }
 
     .col-day {
@@ -208,7 +214,7 @@
     th.is-weekend { background: var(--c-we-hdr) !important; color: #c62828 !important; }
     td.is-weekend { background: var(--c-we-col); }
     
-    /* Dicker blauer Rahmen für den heutigen Tag (überlagert KEINE Schichtfarben!) */
+    /* Dicker blauer Rahmen für den heutigen Tag */
     th.is-today { 
       outline: 2px solid #0056b3 !important; 
       outline-offset: -2px; 
@@ -232,7 +238,7 @@
     .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg) !important; font-weight: 700; }
     .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg) !important; font-weight: 700; }
 
-    /* Dicke Trennlinie & Header zwischen den Funktionsbereichen */
+    /* Trennzeile & Header zwischen den Funktionsbereichen */
     .row-group-header td {
       background: #37474f !important;
       color: #ffffff !important;
@@ -244,9 +250,10 @@
       height: 22px;
       border-top: 3px solid #212121 !important;
       border-bottom: 1px solid #263238 !important;
+      cursor: default;
     }
 
-    /* Start-PIN Popup */
+    /* Modals (PIN & Export) */
     .pin-overlay {
       display: flex;
       position: fixed;
@@ -259,19 +266,18 @@
     }
     .pin-card {
       background: white;
-      padding: 24px;
+      padding: 22px;
       border-radius: 12px;
       text-align: center;
-      width: 290px;
+      width: 310px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.4);
     }
     .pin-card input {
       width: 100%;
       padding: 10px;
-      font-size: 1.3rem;
-      letter-spacing: 4px;
+      font-size: 1.2rem;
       text-align: center;
-      margin: 16px 0;
+      margin: 14px 0;
       border: 2px solid var(--border);
       border-radius: 6px;
       outline: none;
@@ -279,7 +285,12 @@
     .pin-card input:focus {
       border-color: var(--primary);
     }
-    .pin-card button {
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .btn-action {
       width: 100%;
       padding: 10px;
       border-radius: 6px;
@@ -289,6 +300,14 @@
       color: white;
       font-size: 0.95rem;
       cursor: pointer;
+    }
+    .btn-action.whatsapp {
+      background: #25D366;
+      color: white;
+    }
+    .btn-action.secondary {
+      background: #eceff1;
+      color: #37474f;
     }
   </style>
 </head>
@@ -325,12 +344,29 @@
   </div>
 </div>
 
+<!-- Erzwungene Start-PIN -->
 <div class="pin-overlay" id="pinModal">
   <div class="pin-card">
     <h3 style="font-size: 1.05rem; color: #1f4e78;">Dienstplan gesperrt</h3>
     <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;">Bitte Sicherheits-PIN eingeben:</p>
     <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="PIN" autofocus>
-    <button id="btnPinSubmit">Entsperren</button>
+    <button class="btn-action" id="btnPinSubmit">Entsperren</button>
+  </div>
+</div>
+
+<!-- WhatsApp-Export Sicherheits-Dialog -->
+<div class="pin-overlay" id="exportModal" style="display: none;">
+  <div class="pin-card">
+    <h3 style="font-size: 1.05rem; color: #1f4e78;" id="exportTitle">Monatsplan teilen</h3>
+    <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;" id="exportSubtitle">Sicherheitsabfrage: Bitte eigene Kennung bestätigen:</p>
+    
+    <input type="text" id="exportKennungInput" placeholder="z.B. NW... oder 661" autofocus autocomplete="off">
+    
+    <div class="btn-group">
+      <button class="btn-action whatsapp" id="btnExportWhatsApp">📲 In WhatsApp teilen</button>
+      <button class="btn-action secondary" id="btnExportCopy">📋 In Zwischenablage</button>
+      <button class="btn-action secondary" id="btnExportCancel" style="margin-top:4px;">Abbrechen</button>
+    </div>
   </div>
 </div>
 
@@ -344,6 +380,7 @@
   let gIsUnlocked = false;
   let gShowVertreter = false;
   let gCurrentDate = new Date();
+  let gSelectedUid = null;
 
   function decryptRC4Hex(hexStr, password) {
     try {
@@ -457,7 +494,6 @@
       return;
     }
 
-    // 1. Zuweisung in die gewünschten Funktionsbereiche
     const groups = {
       "DGL": [],
       "EB": [],
@@ -500,7 +536,7 @@
         const meta = gDataMeta[uid] || {};
         const label = meta.vorname ? meta.vorname : uid;
 
-        let rowHtml = `<tr><td class="col-id" title="${uid}">${label}</td>`;
+        let rowHtml = `<tr><td class="col-id" data-uid="${uid}" title="Tippen zum Teilen des Monats">${label} 📤</td>`;
 
         for (let d = 1; d <= daysCount; d++) {
           const dObj = new Date(year, month, d);
@@ -526,7 +562,6 @@
 
     let tbodyHtml = "";
 
-    // Stamm-Funktionen
     const stammOrder = ["DGL", "EB", "OSINT", "FLD / FLDL"];
     stammOrder.forEach(grpName => {
       const memberList = groups[grpName];
@@ -536,7 +571,6 @@
       }
     });
 
-    // Vertreter-Bereiche (DGLV und EBV getrennt)
     if (gShowVertreter) {
       const vertreterOrder = ["DGLV", "EBV"];
       vertreterOrder.forEach(grpName => {
@@ -550,9 +584,72 @@
 
     tbody.innerHTML = tbodyHtml;
 
+    // Klick auf eine Namenszeile zum Exportieren
+    document.querySelectorAll(".col-id[data-uid]").forEach(el => {
+      el.addEventListener("click", () => {
+        const uid = el.getAttribute("data-uid");
+        openExportDialog(uid);
+      });
+    });
+
     if (autoScroll) {
       setTimeout(scrollToToday, 100);
     }
+  }
+
+  // Export-Dialog Logik
+  function openExportDialog(uid) {
+    gSelectedUid = uid;
+    const meta = gDataMeta[uid] || {};
+    const name = meta.vorname || uid;
+    
+    document.getElementById("exportTitle").textContent = `Dienstplan von ${name}`;
+    document.getElementById("exportSubtitle").textContent = `Bitte zur Bestätigung deine Kennung (z.B. ${uid.slice(-3)} oder ${uid}) eingeben:`;
+    
+    const inp = document.getElementById("exportKennungInput");
+    inp.value = "";
+    document.getElementById("exportModal").style.display = "flex";
+    inp.focus();
+  }
+
+  function validateExportKennung() {
+    const entered = document.getElementById("exportKennungInput").value.trim().toUpperCase();
+    if (!entered) return false;
+    
+    const targetUid = gSelectedUid.toUpperCase();
+    // Erlaubt volle Kennung (z.B. NW053661) oder die letzten Ziffern (z.B. 661 oder 53661)
+    if (entered === targetUid || targetUid.endsWith(entered)) {
+      return true;
+    }
+    return false;
+  }
+
+  function generateExportText() {
+    const year = gCurrentDate.getFullYear();
+    const month = gCurrentDate.getMonth();
+    const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+    const daysCount = new Date(year, month + 1, 0).getDate();
+    
+    const meta = gDataMeta[gSelectedUid] || {};
+    const name = meta.vorname || gSelectedUid;
+    const shifts = gDataShifts[gSelectedUid] || {};
+
+    let text = `📅 *Dienstplan ${name}* (${monthNames[month]} ${year})\n`;
+    text += `────────────────────\n`;
+
+    for (let d = 1; d <= daysCount; d++) {
+      const dObj = new Date(year, month, d);
+      const dayOfWeek = dObj.getDay();
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const shift = shifts[iso] || "Frei";
+      const dayStr = String(d).padStart(2, '0');
+      
+      text += `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}. :  *${shift}*\n`;
+    }
+
+    text += `────────────────────\nStand: ${new Date().toLocaleDateString("de-DE")}`;
+    return text;
   }
 
   window.addEventListener("DOMContentLoaded", () => {
@@ -565,6 +662,12 @@
     const pinModal = document.getElementById("pinModal");
     const pinInput = document.getElementById("pinInput");
     const btnPinSubmit = document.getElementById("btnPinSubmit");
+
+    // Export Modal Buttons
+    const exportModal = document.getElementById("exportModal");
+    const btnExportWhatsApp = document.getElementById("btnExportWhatsApp");
+    const btnExportCopy = document.getElementById("btnExportCopy");
+    const btnExportCancel = document.getElementById("btnExportCancel");
 
     fetch(FIREBASE_DB_URL)
       .then(r => r.json())
@@ -624,6 +727,36 @@
     document.getElementById("btnNextMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
       renderTable(false);
+    });
+
+    // WhatsApp Export Aktionen
+    btnExportWhatsApp.addEventListener("click", () => {
+      if (!validateExportKennung()) {
+        alert("Ungültige Kennung! Zugriff verweigert.");
+        return;
+      }
+      const text = generateExportText();
+      const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+      exportModal.style.display = "none";
+      window.open(url, "_blank");
+    });
+
+    btnExportCopy.addEventListener("click", () => {
+      if (!validateExportKennung()) {
+        alert("Ungültige Kennung! Zugriff verweigert.");
+        return;
+      }
+      const text = generateExportText();
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Dienstplan wurde in die Zwischenablage kopiert!");
+        exportModal.style.display = "none";
+      }).catch(() => {
+        alert("Kopieren fehlgeschlagen.");
+      });
+    });
+
+    btnExportCancel.addEventListener("click", () => {
+      exportModal.style.display = "none";
     });
   });
 </script>
