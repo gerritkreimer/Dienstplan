@@ -629,7 +629,7 @@
     return (entered === targetUid);
   }
 
-  function generateExportText() {
+function generateExportText() {
     const year = gCurrentDate.getFullYear();
     const month = gCurrentDate.getMonth();
     const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -641,7 +641,7 @@
     const initial = rawName ? rawName.charAt(0).toUpperCase() + "." : "";
     const shifts = gDataShifts[gSelectedUid] || {};
 
-    let text = `*${initial} (${monthNames[month]} ${year})*\n`;
+    let text = `${initial} (${monthNames[month]} ${year})\n`;
     text += `────────────────────\n`;
 
     for (let d = 1; d <= daysCount; d++) {
@@ -653,8 +653,10 @@
       const datumPrefix = `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}.`;
 
       if (rawShift !== "") {
-        text += `${datumPrefix} :  *${rawShift}*\n`;
+        // Tag mit Dienst: sauber ohne Sternchen
+        text += `${datumPrefix} :  ${rawShift}\n`;
       } else {
+        // Freier Tag: komplett leer nach dem Doppelpunkt
         text += `${datumPrefix} :\n`;
       }
     }
