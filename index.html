@@ -178,9 +178,9 @@
       position: sticky;
       left: 0;
       z-index: 10;
-      width: 110px;
-      min-width: 110px;
-      max-width: 110px;
+      width: 115px;
+      min-width: 115px;
+      max-width: 115px;
       background: #f8f9fa;
       font-weight: 700;
       text-align: left;
@@ -208,29 +208,42 @@
     th.is-weekend { background: var(--c-we-hdr) !important; color: #c62828 !important; }
     td.is-weekend { background: var(--c-we-col); }
     
-    /* Aktueller Tag */
-    th.is-today, td.is-today { 
-      outline: 2px solid #1565c0; 
+    /* Dicker blauer Rahmen für den heutigen Tag (überlagert KEINE Schichtfarben!) */
+    th.is-today { 
+      outline: 2px solid #0056b3 !important; 
       outline-offset: -2px; 
-      background-color: #e3f2fd !important;
+      background-color: #bbdefb !important;
+      font-weight: 900 !important;
+    }
+    td.is-today { 
+      box-shadow: inset 2px 0 0 0 #0056b3, inset -2px 0 0 0 #0056b3;
+    }
+    td.is-today:not([class*="shift-"]) {
+      background-color: #f1f8fe;
     }
 
-    .shift-F  { background: var(--c-f-bg) !important; color: var(--c-f-fg); font-weight: 700; }
-    .shift-S  { background: var(--c-s-bg) !important; color: var(--c-s-fg); font-weight: 700; }
-    .shift-N  { background: var(--c-n-bg) !important; color: var(--c-n-fg); font-weight: 700; }
-    .shift-U, .shift-SU { background: var(--c-u-bg) !important; color: var(--c-u-fg); font-weight: 700; }
-    .shift-WF { background: var(--c-wf-bg) !important; color: var(--c-wf-fg); font-weight: 700; }
-    .shift-T  { background: var(--c-t-bg) !important; color: var(--c-t-fg); font-weight: 700; }
-    .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg); font-weight: 700; }
-    .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg); font-weight: 700; }
+    /* Schicht-Farben */
+    .shift-F  { background: var(--c-f-bg) !important; color: var(--c-f-fg) !important; font-weight: 700; }
+    .shift-S  { background: var(--c-s-bg) !important; color: var(--c-s-fg) !important; font-weight: 700; }
+    .shift-N  { background: var(--c-n-bg) !important; color: var(--c-n-fg) !important; font-weight: 700; }
+    .shift-U, .shift-SU { background: var(--c-u-bg) !important; color: var(--c-u-fg) !important; font-weight: 700; }
+    .shift-WF { background: var(--c-wf-bg) !important; color: var(--c-wf-fg) !important; font-weight: 700; }
+    .shift-T  { background: var(--c-t-bg) !important; color: var(--c-t-fg) !important; font-weight: 700; }
+    .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg) !important; font-weight: 700; }
+    .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg) !important; font-weight: 700; }
 
-    .row-separator td {
-      background: #cfd8dc !important;
-      font-weight: 700;
-      color: #37474f;
+    /* Dicke Trennlinie & Header zwischen den Funktionsbereichen */
+    .row-group-header td {
+      background: #37474f !important;
+      color: #ffffff !important;
+      font-weight: 800;
+      font-size: 0.72rem;
+      letter-spacing: 1px;
       text-align: left;
-      padding-left: 8px;
-      height: 24px;
+      padding-left: 10px;
+      height: 22px;
+      border-top: 3px solid #212121 !important;
+      border-bottom: 1px solid #263238 !important;
     }
 
     /* Start-PIN Popup */
@@ -413,7 +426,7 @@
     const isCurrentMonth = (now.getFullYear() === year && now.getMonth() === month);
     const todayDayNum = now.getDate();
 
-    let thWochentag = `<th class="col-id">Name</th>`;
+    let thWochentag = `<th class="col-id">Bereich / Name</th>`;
     let thTage = `<th class="col-id">Datum</th>`;
 
     for (let d = 1; d <= daysCount; d++) {
@@ -444,15 +457,30 @@
       return;
     }
 
-    let stammKeys = [];
-    let vertreterKeys = [];
+    // 1. Zuweisung in die gewünschten Funktionsbereiche
+    const groups = {
+      "DGL": [],
+      "EB": [],
+      "OSINT": [],
+      "FLD / FLDL": [],
+      "DGLV": [],
+      "EBV": []
+    };
 
     activeKeys.forEach(uid => {
       const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.trim().toUpperCase() : "";
-      if (fkt === "DGLV" || fkt === "EBV") {
-        vertreterKeys.push(uid);
-      } else {
-        stammKeys.push(uid);
+      if (fkt === "DGL") {
+        groups["DGL"].push(uid);
+      } else if (fkt === "EB") {
+        groups["EB"].push(uid);
+      } else if (fkt === "OSINT") {
+        groups["OSINT"].push(uid);
+      } else if (fkt === "FLD" || fkt === "FLDL") {
+        groups["FLD / FLDL"].push(uid);
+      } else if (fkt === "DGLV") {
+        groups["DGLV"].push(uid);
+      } else if (fkt === "EBV") {
+        groups["EBV"].push(uid);
       }
     });
 
@@ -463,19 +491,14 @@
       return a.localeCompare(b);
     };
 
-    stammKeys.sort(sortFn);
-    vertreterKeys.sort(sortFn);
+    Object.keys(groups).forEach(grp => groups[grp].sort(sortFn));
 
-    function buildRowsHtml(keysList) {
+    function renderGroupRows(keysList) {
       let html = "";
       keysList.forEach(uid => {
         const shifts = gDataShifts[uid] || {};
         const meta = gDataMeta[uid] || {};
-        
-        let label = meta.vorname ? meta.vorname : uid;
-        if (meta.fkt && (meta.fkt === "DGLV" || meta.fkt === "EBV")) {
-          label = `${meta.fkt} ${label}`;
-        }
+        const label = meta.vorname ? meta.vorname : uid;
 
         let rowHtml = `<tr><td class="col-id" title="${uid}">${label}</td>`;
 
@@ -501,15 +524,28 @@
       return html;
     }
 
-    let tbodyHtml = buildRowsHtml(stammKeys);
+    let tbodyHtml = "";
 
-    if (gShowVertreter) {
-      if (vertreterKeys.length > 0) {
-        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Vertreter (DGLV / EBV)</td></tr>`;
-        tbodyHtml += buildRowsHtml(vertreterKeys);
-      } else {
-        tbodyHtml += `<tr class="row-separator"><td colspan="${daysCount + 1}">Keine aktiven Vertreter vorhanden</td></tr>`;
+    // Stamm-Funktionen
+    const stammOrder = ["DGL", "EB", "OSINT", "FLD / FLDL"];
+    stammOrder.forEach(grpName => {
+      const memberList = groups[grpName];
+      if (memberList.length > 0) {
+        tbodyHtml += `<tr class="row-group-header"><td colspan="${daysCount + 1}">${grpName}</td></tr>`;
+        tbodyHtml += renderGroupRows(memberList);
       }
+    });
+
+    // Vertreter-Bereiche (DGLV und EBV getrennt)
+    if (gShowVertreter) {
+      const vertreterOrder = ["DGLV", "EBV"];
+      vertreterOrder.forEach(grpName => {
+        const memberList = groups[grpName];
+        if (memberList.length > 0) {
+          tbodyHtml += `<tr class="row-group-header" style="background:#546e7a !important;"><td colspan="${daysCount + 1}">${grpName} (Vertreter)</td></tr>`;
+          tbodyHtml += renderGroupRows(memberList);
+        }
+      });
     }
 
     tbody.innerHTML = tbodyHtml;
