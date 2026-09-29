@@ -238,7 +238,7 @@
     .shift-KR, .shift-KUR { background: var(--c-kr-bg) !important; color: var(--c-kr-fg) !important; font-weight: 700; }
     .shift-LA { background: var(--c-la-bg) !important; color: var(--c-la-fg) !important; font-weight: 700; }
 
-/* Kompakte Darstellung bei LA mit Zeitangaben */
+    /* Kompakte Darstellung bei LA mit Zeitangaben */
     td.col-day.shift-LA {
       font-size: 0.62rem;
       padding: 1px 0px;
@@ -629,7 +629,7 @@
     return (entered === targetUid);
   }
 
-function generateExportText() {
+  function generateExportText() {
     const year = gCurrentDate.getFullYear();
     const month = gCurrentDate.getMonth();
     const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -653,10 +653,8 @@ function generateExportText() {
       const datumPrefix = `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}.`;
 
       if (rawShift !== "") {
-        // Tag mit Dienst: sauber ohne Sternchen
         text += `${datumPrefix} :  ${rawShift}\n`;
       } else {
-        // Freier Tag: komplett leer nach dem Doppelpunkt
         text += `${datumPrefix} :\n`;
       }
     }
@@ -682,23 +680,64 @@ function generateExportText() {
     const btnExportCancel = document.getElementById("btnExportCancel");
     const exportKennungInput = document.getElementById("exportKennungInput");
 
-    fetch(FIREBASE_DB_URL)
-      .then(r => r.json())
-      .then(data => {
-        liveDot.classList.add("online");
-        processPayload(data);
-      })
-      .catch(err => console.warn("Fetch Error:", err));
+    // 1. Initialer Abruf mit Cache-Buster
+    function ladeDatenAusFirebase() {
+      fetch(`${FIREBASE_DB_URL}?nocache=${Date.now()}`)
+        .then(r => {
+          if (!r.ok) throw new Error("Netzwerkfehler");
+          return r.json();
+        })
+        .then(data => {
+          liveDot.classList.add("online");
+          processPayload(data);
+        })
+        .catch(err => {
+          console.warn("Fetch Error:", err);
+          liveDot.classList.remove("online");
+        });
+    }
 
-    try {
-      const sse = new EventSource(FIREBASE_DB_URL);
-      sse.addEventListener("put", (e) => {
-        liveDot.classList.add("online");
-        const res = JSON.parse(e.data);
-        if (res.data) processPayload(res.data);
-      });
-      sse.onerror = () => liveDot.classList.remove("online");
-    } catch(e) {}
+    ladeDatenAusFirebase();
+
+    // 2. Robuster EventSource-Stream mit Auto-Reconnect
+    let sse = null;
+    function starteSSE() {
+      if (sse) {
+        try { sse.close(); } catch(e) {}
+      }
+      
+      try {
+        sse = new EventSource(FIREBASE_DB_URL);
+        sse.addEventListener("put", (e) => {
+          liveDot.classList.add("online");
+          try {
+            const res = JSON.parse(e.data);
+            if (res.data) processPayload(res.data);
+          } catch(err) {
+            console.error("Payload Parse Fehler:", err);
+          }
+        });
+        
+        sse.onerror = () => {
+          liveDot.classList.remove("online");
+          try { sse.close(); } catch(e) {}
+          // Automatischer Neuverbindungsversuch nach 5 Sekunden
+          setTimeout(starteSSE, 5000);
+        };
+      } catch(e) {}
+    }
+
+    starteSSE();
+
+    // 3. Fallback: Bei App-Rückkehr ins Bild (Handy entsperrt) sofort frisch laden
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        ladeDatenAusFirebase();
+      }
+    });
+
+    // 4. Sicherheits-Polling alle 3 Minuten im Hintergrund
+    setInterval(ladeDatenAusFirebase, 3 * 60 * 1000);
 
     function checkPin() {
       const entered = String(pinInput.value).trim();
