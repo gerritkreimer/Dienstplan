@@ -446,13 +446,27 @@
     }
   }
 
-  function scrollToToday() {
-    const todayCell = document.querySelector("th.is-today");
+  function scrollToPosition() {
     const wrapper = document.getElementById("gridWrapper");
-    if (todayCell && wrapper) {
-      const offset = todayCell.offsetLeft - 120;
+    if (!wrapper) return;
+
+    const now = new Date();
+    const isCurrentMonth = (now.getFullYear() === gCurrentDate.getFullYear() && now.getMonth() === gCurrentDate.getMonth());
+
+    if (isCurrentMonth) {
+      // Im aktuellen Monat: Zum heutigen Tag scrollen
+      const todayCell = document.querySelector("th.is-today");
+      if (todayCell) {
+        const offset = todayCell.offsetLeft - 120;
+        wrapper.scrollTo({
+          left: Math.max(0, offset),
+          behavior: "smooth"
+        });
+      }
+    } else {
+      // In anderen Monaten: Immer ganz nach links auf den 1. des Monats springen
       wrapper.scrollTo({
-        left: Math.max(0, offset),
+        left: 0,
         behavior: "smooth"
       });
     }
@@ -605,7 +619,7 @@
     });
 
     if (autoScroll) {
-      setTimeout(scrollToToday, 100);
+      setTimeout(scrollToPosition, 100);
     }
   }
 
@@ -680,11 +694,11 @@
     const btnExportCancel = document.getElementById("btnExportCancel");
     const exportKennungInput = document.getElementById("exportKennungInput");
 
-    // 1. Initialer Abruf mit Cache-Buster
+    // 1. Robuster Abruf ohne fehlerhafte URL-Parameter (mit reinem Cache-Header)
     function ladeDatenAusFirebase() {
-      fetch(`${FIREBASE_DB_URL}?nocache=${Date.now()}`)
+      fetch(FIREBASE_DB_URL, { cache: "no-store" })
         .then(r => {
-          if (!r.ok) throw new Error("Netzwerkfehler");
+          if (!r.ok) throw new Error("Netzwerkstatus: " + r.status);
           return r.json();
         })
         .then(data => {
@@ -692,20 +706,19 @@
           processPayload(data);
         })
         .catch(err => {
-          console.warn("Fetch Error:", err);
+          console.warn("Fetch Fehler:", err);
           liveDot.classList.remove("online");
         });
     }
 
     ladeDatenAusFirebase();
 
-    // 2. Robuster EventSource-Stream mit Auto-Reconnect
+    // 2. Automatischer Reconnect für den Live-Stream
     let sse = null;
     function starteSSE() {
       if (sse) {
         try { sse.close(); } catch(e) {}
       }
-      
       try {
         sse = new EventSource(FIREBASE_DB_URL);
         sse.addEventListener("put", (e) => {
@@ -717,11 +730,9 @@
             console.error("Payload Parse Fehler:", err);
           }
         });
-        
         sse.onerror = () => {
           liveDot.classList.remove("online");
           try { sse.close(); } catch(e) {}
-          // Automatischer Neuverbindungsversuch nach 5 Sekunden
           setTimeout(starteSSE, 5000);
         };
       } catch(e) {}
@@ -729,14 +740,14 @@
 
     starteSSE();
 
-    // 3. Fallback: Bei App-Rückkehr ins Bild (Handy entsperrt) sofort frisch laden
+    // 3. Beim Aufwecken des Handys sofort frisch laden
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         ladeDatenAusFirebase();
       }
     });
 
-    // 4. Sicherheits-Polling alle 3 Minuten im Hintergrund
+    // 4. Regelmäßiger Hintergrund-Abgleich alle 3 Minuten
     setInterval(ladeDatenAusFirebase, 3 * 60 * 1000);
 
     function checkPin() {
@@ -771,14 +782,15 @@
     btnGoToday.addEventListener("click", jumpToTodayAction);
     displayMonth.addEventListener("click", jumpToTodayAction);
 
+    // Monatswechsel: Blättern mit automatischem Scroll-Verhalten
     document.getElementById("btnPrevMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
-      renderTable(false);
+      renderTable(true);
     });
 
     document.getElementById("btnNextMonth").addEventListener("click", () => {
       gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
-      renderTable(false);
+      renderTable(true);
     });
 
     btnExportWhatsApp.addEventListener("click", () => {
