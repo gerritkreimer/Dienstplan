@@ -337,4 +337,468 @@
   <div class="month-bar">
     <button class="nav-btn" id="btnPrevMonth">&#8249;</button>
     <span class="month-title" id="displayMonth" title="Klicken, um zum heutigen Tag zu springen">September 2026</span>
-    <button class="nav-btn" id="btnNextMonth">&#8250
+    <button class="nav-btn" id="btnNextMonth">&#8250;</button>
+  </div>
+
+  <div class="grid-wrapper" id="gridWrapper">
+    <table id="matrixTable">
+      <thead>
+        <tr id="rowWochentage"></tr>
+        <tr id="rowTage"></tr>
+      </thead>
+      <tbody id="matrixBody">
+        <tr><td class="col-id">Status</td><td colspan="31" style="text-align:left; padding-left:14px; color:#546e7a;">Bitte PIN eingeben zum Entsperren...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Erzwungene Start-PIN -->
+<div class="pin-overlay" id="pinModal">
+  <div class="pin-card">
+    <h3 style="font-size: 1.05rem; color: #1f4e78;">Dienstplan gesperrt</h3>
+    <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;">Bitte Sicherheits-PIN eingeben:</p>
+    <input type="password" id="pinInput" maxlength="10" inputmode="numeric" placeholder="PIN" autofocus>
+    <button class="btn-action" id="btnPinSubmit">Entsperren</button>
+  </div>
+</div>
+
+<!-- WhatsApp-Export Sicherheits-Dialog -->
+<div class="pin-overlay" id="exportModal" style="display: none;">
+  <div class="pin-card">
+    <h3 style="font-size: 1.05rem; color: #1f4e78;" id="exportTitle">Monatsplan teilen</h3>
+    <p style="font-size: 0.8rem; color: #607d8b; margin-top: 4px;">Bitte vollständige NW-Kennung bestätigen (z. B. NW012345):</p>
+    
+    <input type="text" id="exportKennungInput" placeholder="NW012345" autofocus autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+    
+    <div class="btn-group">
+      <button class="btn-action whatsapp" id="btnExportWhatsApp">📲 In WhatsApp teilen</button>
+      <button class="btn-action secondary" id="btnExportCopy">📋 In Zwischenablage</button>
+      <button class="btn-action secondary" id="btnExportCancel" style="margin-top:4px;">Abbrechen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const FIREBASE_DB_URL = "https://dienstplan-2cad6-default-rtdb.europe-west1.firebasedatabase.app/dienstplan.json";
+  const SYNC_SECRET_KEY = "StrengGeheimDienstplan2026!#";
+
+  let gDataShifts = {};
+  let gDataMeta = {};
+  let gServerPin = "711000";
+  let gIsUnlocked = false;
+  let gShowVertreter = false;
+  let gCurrentDate = new Date();
+  let gSelectedUid = null;
+
+  function decryptRC4Hex(hexStr, password) {
+    try {
+      if (!hexStr || !password) return null;
+      let s = new Array(256), k = new Array(256);
+      for (let i = 0; i < 256; i++) {
+        s[i] = i;
+        k[i] = password.charCodeAt(i % password.length);
+      }
+      let j = 0;
+      for (let i = 0; i < 256; i++) {
+        j = (j + s[i] + k[i]) % 256;
+        let temp = s[i]; s[i] = s[j]; s[j] = temp;
+      }
+      let i = 0; j = 0;
+      let out = [];
+      for (let x = 0; x < hexStr.length; x += 2) {
+        i = (i + 1) % 256;
+        j = (j + s[i]) % 256;
+        let temp = s[i]; s[i] = s[j]; s[j] = temp;
+        let t = (s[i] + s[j]) % 256;
+        let val = parseInt(hexStr.substr(x, 2), 16) ^ s[t];
+        out.push(String.fromCharCode(val));
+      }
+      return JSON.parse(out.join(""));
+    } catch (e) {
+      console.error("Krypto-Fehler:", e);
+      return null;
+    }
+  }
+
+  function processPayload(raw) {
+    if (!raw) return;
+    let obj = raw;
+    if (raw.payload) {
+      obj = decryptRC4Hex(raw.payload, SYNC_SECRET_KEY);
+    }
+    if (obj) {
+      gDataShifts = obj.shifts || obj;
+      gDataMeta = obj.meta || {};
+
+      if (Object.keys(gDataMeta).length === 0 && Object.keys(gDataShifts).length > 0) {
+        Object.keys(gDataShifts).forEach((uid, idx) => {
+          gDataMeta[uid] = { vorname: uid, fkt: "DGL", sort: idx + 1 };
+        });
+      }
+
+      if (obj.pin) {
+        gServerPin = String(obj.pin).trim();
+      }
+      if (gIsUnlocked) {
+        renderTable(true);
+      }
+    }
+  }
+
+  function scrollToPosition() {
+    const wrapper = document.getElementById("gridWrapper");
+    if (!wrapper) return;
+
+    const now = new Date();
+    const isCurrentMonth = (now.getFullYear() === gCurrentDate.getFullYear() && now.getMonth() === gCurrentDate.getMonth());
+
+    if (isCurrentMonth) {
+      const todayCell = document.querySelector("th.is-today");
+      if (todayCell) {
+        const offset = todayCell.offsetLeft - 120;
+        wrapper.scrollTo({
+          left: Math.max(0, offset),
+          behavior: "smooth"
+        });
+      }
+    } else {
+      wrapper.scrollTo({
+        left: 0,
+        behavior: "smooth"
+      });
+    }
+  }
+
+  function renderTable(autoScroll = false) {
+    const year = gCurrentDate.getFullYear();
+    const month = gCurrentDate.getMonth();
+    const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    
+    document.getElementById("displayMonth").textContent = `${monthNames[month]} ${year}`;
+
+    const daysCount = new Date(year, month + 1, 0).getDate();
+    const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+    
+    const now = new Date();
+    const isCurrentMonth = (now.getFullYear() === year && now.getMonth() === month);
+    const todayDayNum = now.getDate();
+
+    let thWochentag = `<th class="col-id">Bereich / Name</th>`;
+    let thTage = `<th class="col-id">Datum</th>`;
+
+    for (let d = 1; d <= daysCount; d++) {
+      const dObj = new Date(year, month, d);
+      const dayOfWeek = dObj.getDay();
+      const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
+      const isToday = isCurrentMonth && (d === todayDayNum);
+
+      thWochentag += `<th class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">${dayNames[dayOfWeek]}</th>`;
+      thTage += `<th class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''}">${String(d).padStart(2, '0')}.</th>`;
+    }
+
+    document.getElementById("rowWochentage").innerHTML = thWochentag;
+    document.getElementById("rowTage").innerHTML = thTage;
+
+    const tbody = document.getElementById("matrixBody");
+
+    if (!gIsUnlocked) {
+      tbody.innerHTML = `<tr><td class="col-id">Gesperrt</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Bitte PIN eingeben zum Entsperren...</td></tr>`;
+      return;
+    }
+
+    const activeKeys = Object.keys(gDataMeta);
+
+    if (activeKeys.length === 0) {
+      tbody.innerHTML = `<tr><td class="col-id">Info</td><td colspan="${daysCount}" style="text-align:left; padding-left:14px; color:#546e7a;">Lade Schichtdaten aus der Cloud...</td></tr>`;
+      return;
+    }
+
+    const groups = {
+      "DGL": [],
+      "EB": [],
+      "OSINT": [],
+      "FLD / FLDL": [],
+      "DGLV": [],
+      "EBV": []
+    };
+
+    activeKeys.forEach(uid => {
+      const fkt = (gDataMeta[uid] && gDataMeta[uid].fkt) ? gDataMeta[uid].fkt.trim().toUpperCase() : "";
+      if (fkt === "DGL") {
+        groups["DGL"].push(uid);
+      } else if (fkt === "EB") {
+        groups["EB"].push(uid);
+      } else if (fkt === "OSINT") {
+        groups["OSINT"].push(uid);
+      } else if (fkt === "FLD" || fkt === "FLDL") {
+        groups["FLD / FLDL"].push(uid);
+      } else if (fkt === "DGLV") {
+        groups["DGLV"].push(uid);
+      } else if (fkt === "EBV") {
+        groups["EBV"].push(uid);
+      }
+    });
+
+    const sortFn = (a, b) => {
+      const sortA = (gDataMeta[a] && gDataMeta[a].sort !== undefined) ? gDataMeta[a].sort : 999;
+      const sortB = (gDataMeta[b] && gDataMeta[b].sort !== undefined) ? gDataMeta[b].sort : 999;
+      if (sortA !== sortB) return sortA - sortB;
+      return a.localeCompare(b);
+    };
+
+    Object.keys(groups).forEach(grp => groups[grp].sort(sortFn));
+
+    function renderGroupRows(keysList) {
+      let html = "";
+      keysList.forEach(uid => {
+        const shifts = gDataShifts[uid] || {};
+        const meta = gDataMeta[uid] || {};
+        const label = meta.vorname ? meta.vorname : uid;
+
+        let rowHtml = `<tr><td class="col-id" data-uid="${uid}" title="Tippen zum Teilen des Monats">${label} 📤</td>`;
+
+        for (let d = 1; d <= daysCount; d++) {
+          const dObj = new Date(year, month, d);
+          const dayOfWeek = dObj.getDay();
+          const isWe = (dayOfWeek === 0 || dayOfWeek === 6);
+          const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          const isToday = isCurrentMonth && (d === todayDayNum);
+
+          const rawShift = shifts[iso] || "";
+          const baseShift = rawShift.replace(/-WE|-FT/gi, "").trim().toUpperCase();
+
+          let cls = "";
+          if (baseShift.startsWith("LA")) {
+            cls = "shift-LA";
+          } else if (baseShift) {
+            cls = `shift-${baseShift}`;
+          }
+
+          rowHtml += `<td class="col-day ${isWe ? 'is-weekend' : ''} ${isToday ? 'is-today' : ''} ${cls}">${rawShift}</td>`;
+        }
+
+        rowHtml += `</tr>`;
+        html += rowHtml;
+      });
+      return html;
+    }
+
+    let tbodyHtml = "";
+
+    const stammOrder = ["DGL", "EB", "OSINT", "FLD / FLDL"];
+    stammOrder.forEach(grpName => {
+      const memberList = groups[grpName];
+      if (memberList.length > 0) {
+        tbodyHtml += `<tr class="row-group-header"><td colspan="${daysCount + 1}">${grpName}</td></tr>`;
+        tbodyHtml += renderGroupRows(memberList);
+      }
+    });
+
+    if (gShowVertreter) {
+      const vertreterOrder = ["DGLV", "EBV"];
+      vertreterOrder.forEach(grpName => {
+        const memberList = groups[grpName];
+        if (memberList.length > 0) {
+          tbodyHtml += `<tr class="row-group-header" style="background:#546e7a !important;"><td colspan="${daysCount + 1}">${grpName} (Vertreter)</td></tr>`;
+          tbodyHtml += renderGroupRows(memberList);
+        }
+      });
+    }
+
+    tbody.innerHTML = tbodyHtml;
+
+    document.querySelectorAll(".col-id[data-uid]").forEach(el => {
+      el.addEventListener("click", () => {
+        const uid = el.getAttribute("data-uid");
+        openExportDialog(uid);
+      });
+    });
+
+    if (autoScroll) {
+      setTimeout(scrollToPosition, 100);
+    }
+  }
+
+  function openExportDialog(uid) {
+    gSelectedUid = uid;
+    const meta = gDataMeta[uid] || {};
+    const name = meta.vorname || uid;
+    
+    document.getElementById("exportTitle").textContent = `Dienstplan von ${name}`;
+    const inp = document.getElementById("exportKennungInput");
+    inp.value = "";
+    document.getElementById("exportModal").style.display = "flex";
+    inp.focus();
+  }
+
+  function validateExportKennung() {
+    const entered = document.getElementById("exportKennungInput").value.trim().toUpperCase();
+    if (!entered) return false;
+    const targetUid = gSelectedUid.toUpperCase();
+    return (entered === targetUid);
+  }
+
+  function generateExportText() {
+    const year = gCurrentDate.getFullYear();
+    const month = gCurrentDate.getMonth();
+    const monthNames = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+    const dayNames = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+    const daysCount = new Date(year, month + 1, 0).getDate();
+    
+    const meta = gDataMeta[gSelectedUid] || {};
+    const rawName = (meta.vorname || gSelectedUid).trim();
+    const initial = rawName ? rawName.charAt(0).toUpperCase() + "." : "";
+    const shifts = gDataShifts[gSelectedUid] || {};
+
+    let text = `${initial} (${monthNames[month]} ${year})\n`;
+    text += `────────────────────\n`;
+
+    for (let d = 1; d <= daysCount; d++) {
+      const dObj = new Date(year, month, d);
+      const dayOfWeek = dObj.getDay();
+      const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const rawShift = (shifts[iso] || "").trim();
+      const dayStr = String(d).padStart(2, '0');
+      const datumPrefix = `${dayNames[dayOfWeek]}, ${dayStr}.${String(month + 1).padStart(2, '0')}.`;
+
+      if (rawShift !== "") {
+        text += `${datumPrefix} :  ${rawShift}\n`;
+      } else {
+        text += `${datumPrefix} :\n`;
+      }
+    }
+
+    text += `────────────────────\nStand: ${new Date().toLocaleDateString("de-DE")}`;
+    return text;
+  }
+
+  window.addEventListener("DOMContentLoaded", () => {
+    const liveDot = document.getElementById("liveDot");
+    const btnToggleVertreter = document.getElementById("btnToggleVertreter");
+    const btnGoToday = document.getElementById("btnGoToday");
+    const displayMonth = document.getElementById("displayMonth");
+    const pinModal = document.getElementById("pinModal");
+    const pinInput = document.getElementById("pinInput");
+    const btnPinSubmit = document.getElementById("btnPinSubmit");
+
+    const exportModal = document.getElementById("exportModal");
+    const btnExportWhatsApp = document.getElementById("btnExportWhatsApp");
+    const btnExportCopy = document.getElementById("btnExportCopy");
+    const btnExportCancel = document.getElementById("btnExportCancel");
+    const exportKennungInput = document.getElementById("exportKennungInput");
+
+    function ladeDatenAusFirebase() {
+      fetch(FIREBASE_DB_URL + "?t=" + new Date().getTime(), { cache: "no-store" })
+        .then(r => {
+          if (!r.ok) throw new Error("Netzwerkstatus: " + r.status);
+          return r.json();
+        })
+        .then(data => {
+          liveDot.classList.add("online");
+          processPayload(data);
+        })
+        .catch(err => {
+          console.warn("Fetch Fehler:", err);
+          liveDot.classList.remove("online");
+        });
+    }
+
+    // Initialer Abruf
+    ladeDatenAusFirebase();
+
+    // Stabiles Polling alle 30 Sekunden
+    setInterval(ladeDatenAusFirebase, 30000);
+
+    // Bei App-Wechsel / Aufwecken sofort aktualisieren
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) {
+        ladeDatenAusFirebase();
+      }
+    });
+
+    function checkPin() {
+      const entered = String(pinInput.value).trim();
+      if (entered === gServerPin || entered === "711000") {
+        gIsUnlocked = true;
+        pinModal.style.display = "none";
+        renderTable(true);
+      } else {
+        alert("Falsche PIN!");
+        pinInput.value = "";
+        pinInput.focus();
+      }
+    }
+
+    btnPinSubmit.addEventListener("click", checkPin);
+    pinInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") checkPin();
+    });
+
+    btnToggleVertreter.addEventListener("click", () => {
+      gShowVertreter = !gShowVertreter;
+      btnToggleVertreter.classList.toggle("active-vertreter", gShowVertreter);
+      renderTable(false);
+    });
+
+    function jumpToTodayAction() {
+      gCurrentDate = new Date();
+      renderTable(true);
+    }
+
+    btnGoToday.addEventListener("click", jumpToTodayAction);
+    displayMonth.addEventListener("click", jumpToTodayAction);
+
+    document.getElementById("btnPrevMonth").addEventListener("click", () => {
+      gCurrentDate.setMonth(gCurrentDate.getMonth() - 1);
+      renderTable(true);
+    });
+
+    document.getElementById("btnNextMonth").addEventListener("click", () => {
+      gCurrentDate.setMonth(gCurrentDate.getMonth() + 1);
+      renderTable(true);
+    });
+
+    btnExportWhatsApp.addEventListener("click", () => {
+      if (!validateExportKennung()) {
+        alert("Ungültige NW-Kennung! Zugriff verweigert.");
+        exportKennungInput.value = "";
+        exportKennungInput.focus();
+        return;
+      }
+      const text = generateExportText();
+      const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+      exportModal.style.display = "none";
+      window.open(url, "_blank");
+    });
+
+    btnExportCopy.addEventListener("click", () => {
+      if (!validateExportKennung()) {
+        alert("Ungültige NW-Kennung! Zugriff verweigert.");
+        exportKennungInput.value = "";
+        exportKennungInput.focus();
+        return;
+      }
+      const text = generateExportText();
+      navigator.clipboard.writeText(text).then(() => {
+        alert("Dienstplan wurde in die Zwischenablage kopiert!");
+        exportModal.style.display = "none";
+      }).catch(() => {
+        alert("Kopieren fehlgeschlagen.");
+      });
+    });
+
+    exportKennungInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        btnExportWhatsApp.click();
+      }
+    });
+
+    btnExportCancel.addEventListener("click", () => {
+      exportModal.style.display = "none";
+    });
+  });
+</script>
+
+</body>
+</html>
